@@ -1,0 +1,36 @@
+services:
+  # 1. Django Backend (Web Service)
+  - type: web
+    name: complia-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn complia_backend.wsgi:application
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: false
+      - key: ALLOWED_HOSTS
+        value: '*' 
+      - key: CORS_ALLOWED_ORIGINS
+        value: '*' # Lock this down later
+
+  # 2. React Frontend (Static Site)
+  - type: static
+    name: complia-frontend
+    runtime: node
+    buildCommand: cd complia_frontend && npm install && npm run build
+    publishDir: complia_frontend/build
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: complia-backend
+          property: url
+          envVarKey: VITE_API_URL
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
