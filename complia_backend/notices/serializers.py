@@ -22,4 +22,13 @@ class FeedbackSerializer(serializers.ModelSerializer):
     class Meta:
         model = NoticeFeedback
         fields = ['notice', 'is_helpful', 'comments', 'created_at']
+<<<<<<< Updated upstream
 
+=======
+    def validate(self, data):
+        if data.get('is_helpful') == False and not data.get('comments', '').strip():
+            raise serializers.ValidationError({
+                'comments': 'Comments are required when feedback is not helpful.'
+            })
+        return data    
+>>>>>>> Stashed changes
