@@ -3,22 +3,22 @@ Django==5.2.10
 djangorestframework==3.16.1
 django-cors-headers==4.9.0
 
-# Config
+# Database
 python-dotenv==1.2.1
+dj-database-url==2.3.0
+psycopg2-binary==2.9.10
+
+# Auth & Google Login (Relaxed for compatibility)
+django-allauth>=65.0.0
+dj-rest-auth[with_social]>=6.0.0
+djangorestframework-simplejwt>=5.3.1
 
 # Django internals
 asgiref==3.11.0
 sqlparse==0.5.5
 tzdata==2025.3
 
-# Production server
+# Production
 gunicorn==23.0.0
-
-# PostgreSQL driver (production DB)
-psycopg2-binary==2.9.10
-
-# Static files (serve without Nginx)
 whitenoise==6.9.0
-
-# Error monitoring
 sentry-sdk[django]==2.22.0

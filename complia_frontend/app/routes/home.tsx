@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Form, Link } from "react-router";
+import { useState, useEffect } from "react";
+import { Form, Link, useNavigation } from "react-router";
 import { searchNotices } from "../api/client";
 import type { Route } from "./+types/home";
 
@@ -18,12 +18,65 @@ export async function loader({ request }: Route.LoaderArgs) {
   return { results, query: q };
 }
 
+function NoticeSkeleton() {
+  return (
+    <div className="bg-white rounded-2xl p-8 border border-slate-100 relative overflow-hidden">
+      <div className="absolute inset-0 bg-linear-to-r from-transparent via-slate-50/50 to-transparent -translate-x-full animate-shimmer" />
+      <div className="absolute top-6 right-6">
+        <div className="w-24 h-6 bg-slate-100 rounded-full" />
+      </div>
+      <div className="pr-24 space-y-4">
+        <div className="w-16 h-5 bg-slate-50 rounded" />
+        <div className="w-3/4 h-8 bg-slate-100 rounded-lg" />
+        <div className="space-y-2">
+          <div className="w-full h-4 bg-slate-50 rounded" />
+          <div className="w-5/6 h-4 bg-slate-50 rounded" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Home({ loaderData }: Route.ComponentProps) {
   const { results, query } = loaderData;
+  const navigation = useNavigation();
   const [searchTerm, setSearchTerm] = useState(query || "");
+  const [user, setUser] = useState<{ email: string } | null>(null);
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem("user");
+    if (savedUser) setUser(JSON.parse(savedUser));
+  }, []);
+
+  const isLoading = navigation.state === "loading";
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 relative overflow-hidden flex flex-col">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 relative overflow-hidden flex flex-col">
+      
+      {/* Premium Header */}
+      <header className="fixed top-0 inset-x-0 z-50 h-16 bg-white/70 backdrop-blur-xl border-b border-slate-200/50 px-6 flex items-center justify-between">
+        <Link to="/" className="flex items-center gap-2">
+           <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-xl">C</div>
+           <span className="font-bold text-lg tracking-tight text-slate-900">Complia</span>
+        </Link>
+        <div className="flex items-center gap-4">
+          {user ? (
+            <div className="flex items-center gap-3">
+               <span className="text-sm font-medium text-slate-600 hidden sm:block">{user.email}</span>
+               <div className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white shadow-sm flex items-center justify-center text-xs font-bold text-slate-500">
+                  {user.email[0].toUpperCase()}
+               </div>
+            </div>
+          ) : (
+            <Link 
+              to="/login" 
+              className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all active:scale-95 shadow-lg shadow-slate-900/10"
+            >
+              Sign In
+            </Link>
+          )}
+        </div>
+      </header>
 
       {/* Modern Mesh Gradient Background */}
       <div className="fixed inset-0 z-0 pointer-events-none opacity-40">
@@ -32,7 +85,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <div className="absolute bottom-[-20%] left-[20%] w-[50%] h-[50%] bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-4000"></div>
       </div>
 
-      <main className="max-w-4xl mx-auto px-6 py-20 relative z-10 flex-grow w-full">
+      <main className="max-w-4xl mx-auto px-6 py-32 relative z-10 flex-grow w-full">
 
         {/* Hero Section */}
         <div className="text-center mb-16 space-y-6">
@@ -70,15 +123,24 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             />
             <button
               type="submit"
-              className="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-8 py-3 rounded-xl transition-all shadow-lg shadow-slate-900/20 active:scale-95"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-8 py-3 rounded-xl transition-all shadow-lg shadow-indigo-900/10 active:scale-95 flex items-center gap-2"
             >
+              {isLoading && (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              )}
               Search
             </button>
           </Form>
         </div>
 
         {/* Results Area */}
-        {results.length > 0 ? (
+        {isLoading ? (
+          <div className="space-y-6">
+            <NoticeSkeleton />
+            <NoticeSkeleton />
+            <NoticeSkeleton />
+          </div>
+        ) : results.length > 0 ? (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
             <div className="flex items-baseline justify-between border-b border-slate-200/60 pb-4">
               <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Found Matches</h2>
