@@ -1,7 +1,7 @@
 import type { NoticeType } from "../types/notice";
 
-const API_BASE_RAW = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api";
-const API_BASE = API_BASE_RAW.endsWith("/api") ? API_BASE_RAW : `${API_BASE_RAW}/api`;
+const API_BASE_RAW = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api/v1";
+const API_BASE = API_BASE_RAW.endsWith("/api/v1") ? API_BASE_RAW : `${API_BASE_RAW}/api/v1`;
 
 type PaginatedNoticeResponse = {
     count: number;

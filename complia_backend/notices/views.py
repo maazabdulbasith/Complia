@@ -25,6 +25,8 @@ class NoticeTypeViewSet(viewsets.ReadOnlyModelViewSet):
     throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
 
+from rest_framework import permissions
+
 class FeedbackViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
     """
     Write-only endpoint to capture anonymous feedback for a notice page.
@@ -33,3 +35,4 @@ class FeedbackViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
     queryset = NoticeFeedback.objects.all()
     serializer_class = FeedbackSerializer
     throttle_classes = [AnonRateThrottle, UserRateThrottle]
+    permission_classes = [permissions.AllowAny]

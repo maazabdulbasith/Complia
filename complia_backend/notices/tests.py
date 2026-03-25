@@ -64,7 +64,7 @@ class NoticeAPITests(APITestCase):
 
     def test_submit_valid_feedback(self):
         """Submit helpful feedback."""
-        url = reverse('noticefeedback-list')
+        url = reverse('feedback-list')
         data = {
             "notice": self.notice.id,
             "is_helpful": True
@@ -75,7 +75,7 @@ class NoticeAPITests(APITestCase):
 
     def test_submit_invalid_feedback(self):
         """Submit feedback without required fields."""
-        url = reverse('noticefeedback-list')
+        url = reverse('feedback-list')
         data = {
             "is_helpful": True
             # Missing notice ID (required foreign key)

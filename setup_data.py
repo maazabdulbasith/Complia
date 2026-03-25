@@ -8,7 +8,9 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'complia_backend.settings')
 django.setup()
 
 from complia_backend.notices.models import NoticeType, TriggerKeyword
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 def seed_data():
     """Seed or update notices. Safe mode - uses update_or_create, no mass deletions."""
@@ -463,9 +465,9 @@ def seed_data():
     }, ["Red Light", "Signal Jump"])
 
     # Create superuser if not exists
-    if not User.objects.filter(username='admin').exists():
-        User.objects.create_superuser('admin', 'admin@complia.com', 'password123')
-        print("Superuser 'admin' created.")
+    if not User.objects.filter(email='admin@complia.in').exists():
+        User.objects.create_superuser('admin@complia.in', 'password123')
+        print("Superuser 'admin@complia.in' created.")
     
     print("Data seeded successfully!")
 
