@@ -131,7 +131,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <div className="mt-20 text-center">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-8">Frequent Searches</h3>
             <div className="flex flex-wrap justify-center gap-3">
-              {["ASMT-10", "DRC-01", "Scrutiny", "Trademark Objection", "PF Hearing"].map((item) => (
+              {["ASMT-10", "DRC-01", "Scrutiny", "Section 143", "GST Return"].map((item) => (
                 <Link
                   key={item}
                   to={`/?q=${encodeURIComponent(item)}`}

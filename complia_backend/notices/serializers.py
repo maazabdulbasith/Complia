@@ -22,3 +22,4 @@ class FeedbackSerializer(serializers.ModelSerializer):
     class Meta:
         model = NoticeFeedback
         fields = ['notice', 'is_helpful', 'comments', 'created_at']
+

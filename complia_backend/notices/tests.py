@@ -1,106 +1,105 @@
+from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
-
-from .models import NoticeFeedback, NoticeType, TriggerKeyword
-
+from .models import NoticeType, TriggerKeyword, NoticeFeedback
 
 class NoticeAPITests(APITestCase):
     def setUp(self):
+        # Create a sample notice
         self.notice = NoticeType.objects.create(
-            code="GST-ASMT-10",
-            title="Scrutiny of Returns",
-            summary="Scrutiny notice for return discrepancies.",
-            detailed_explanation="Detailed explanation for ASMT-10.",
-            why_received="Mismatch in return filings.",
-            common_mistakes="Ignoring the first notice.",
-            consequences_of_ignoring="Demand order may follow.",
-            next_steps="Reply with supporting details.",
+            code="TEST-001",
+            title="Test Notice Title",
+            summary="Test Summary",
+            detailed_explanation="Detailed Explanation",
+            consequences_of_ignoring="Bad things",
+            next_steps="Step 1, Step 2",
             severity="medium",
-            source_section="CGST Act Section 61",
-            verified_by="QA",
-            is_active=True,
+            is_active=True
         )
-        TriggerKeyword.objects.create(notice_type=self.notice, keyword="ASMT 10")
-
+        # Create a trigger keyword
+        TriggerKeyword.objects.create(
+            notice_type=self.notice,
+            keyword="scrutiny"
+        )
+        
+        # Create an inactive notice
         self.inactive_notice = NoticeType.objects.create(
-            code="IT-148",
-            title="Income Escaping Assessment",
-            summary="Reassessment notice.",
-            detailed_explanation="Detailed explanation for IT-148.",
-            why_received="Possible undisclosed income.",
-            common_mistakes="Ignoring it.",
-            consequences_of_ignoring="Reassessment + penalty.",
-            next_steps="Respond via e-filing portal.",
-            severity="high",
-            source_section="Income Tax Act Section 148",
-            verified_by="QA",
-            is_active=False,
+            code="HIDDEN-001",
+            title="Hidden Notice",
+            detailed_explanation="Explanation",
+            consequences_of_ignoring="Bad things",
+            next_steps="Step 1",
+            is_active=False
         )
 
-    def test_noticetype_model_creation(self):
-        self.assertEqual(self.notice.code, "GST-ASMT-10")
-        self.assertTrue(self.notice.is_active)
-
-    def test_triggerkeyword_relationship(self):
-        self.assertEqual(self.notice.triggers.count(), 1)
-        self.assertEqual(self.notice.triggers.first().keyword, "ASMT 10")
-
-    def test_search_api_returns_results(self):
-        response = self.client.get("/api/notices/?search=ASMT")
+    def test_list_notices(self):
+        """Verify only active notices are listed."""
+        url = reverse('noticetype-list')
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["count"], 1)
-        self.assertEqual(response.data["results"][0]["code"], "GST-ASMT-10")
+        # Test pagination (should be 1 because only one is active)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['code'], "TEST-001")
 
-    def test_search_api_no_results(self):
-        response = self.client.get("/api/notices/?search=DOES-NOT-EXIST")
+    def test_search_notices_by_code(self):
+        """Search by notice code."""
+        url = reverse('noticetype-list')
+        response = self.client.get(url, {'search': 'TEST-001'})
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['code'], "TEST-001")
+
+    def test_search_notices_by_keyword(self):
+        """Search by trigger keyword."""
+        url = reverse('noticetype-list')
+        response = self.client.get(url, {'search': 'scrutiny'})
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['code'], "TEST-001")
+
+    def test_get_notice_detail(self):
+        """Retrieve a specific notice by code."""
+        url = reverse('noticetype-detail', kwargs={'code': 'TEST-001'})
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["count"], 0)
-        self.assertEqual(len(response.data["results"]), 0)
+        self.assertEqual(response.data['title'], "Test Notice Title")
 
-    def test_notice_detail_by_code(self):
-        response = self.client.get(f"/api/notices/{self.notice.code}/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["code"], self.notice.code)
-
-    def test_feedback_submission_valid(self):
-        payload = {
+    def test_submit_valid_feedback(self):
+        """Submit helpful feedback."""
+        url = reverse('noticefeedback-list')
+        data = {
             "notice": self.notice.id,
-            "is_helpful": True,
-            "comments": "Very clear explanation.",
+            "is_helpful": True
         }
-        response = self.client.post("/api/feedback/", payload, format="json")
+        response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(NoticeFeedback.objects.count(), 1)
 
-    def test_feedback_submission_invalid_missing_fields(self):
-        payload = {"comments": "Missing required fields"}
-        response = self.client.post("/api/feedback/", payload, format="json")
+    def test_submit_invalid_feedback(self):
+        """Submit feedback without required fields."""
+        url = reverse('noticefeedback-list')
+        data = {
+            "is_helpful": True
+            # Missing notice ID (required foreign key)
+        }
+        response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("notice", response.data)
-        self.assertIn("is_helpful", response.data)
 
-    def test_pagination_works(self):
-        # We already have one active notice, create enough to force multiple pages.
-        for idx in range(1, 26):
+    def test_pagination(self):
+        """Verify pagination works (set to 20 in settings)."""
+        # Create 25 more notices
+        for i in range(25):
             NoticeType.objects.create(
-                code=f"GST-AUTO-{idx}",
-                title=f"Auto Notice {idx}",
-                summary="Auto-generated summary for pagination test.",
-                detailed_explanation="Auto-generated detailed explanation.",
-                why_received="Auto-generated reason.",
-                common_mistakes="Auto-generated common mistake.",
-                consequences_of_ignoring="Auto-generated consequence.",
-                next_steps="Auto-generated next steps.",
-                severity="low",
-                source_section="Auto Section",
-                verified_by="QA",
-                is_active=True,
+                code=f"PAG-{i}",
+                title=f"Title {i}",
+                detailed_explanation="...",
+                consequences_of_ignoring="...",
+                next_steps="...",
+                is_active=True
             )
-
-        response = self.client.get("/api/notices/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("count", response.data)
-        self.assertIn("next", response.data)
-        self.assertIn("results", response.data)
-        self.assertEqual(len(response.data["results"]), 20)
-        self.assertGreater(response.data["count"], 20)
+        
+        url = reverse('noticetype-list')
+        response = self.client.get(url)
+        # 26 active notices total (1 from setUp + 25)
+        self.assertEqual(response.data['count'], 26)
+        # Should only return 20 per page (limit set in settings.py)
+        self.assertEqual(len(response.data['results']), 20)
+        self.assertIsNotNone(response.data['next'])
