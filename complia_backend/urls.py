@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from notices.views import NoticeTypeViewSet, FeedbackViewSet
+from complia_backend.notices.views import NoticeTypeViewSet, FeedbackViewSet
 
 router = DefaultRouter()
 router.register(r'notices', NoticeTypeViewSet)

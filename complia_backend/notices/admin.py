@@ -9,7 +9,7 @@ class TriggerKeywordInline(admin.TabularInline):
 class NoticeTypeAdmin(admin.ModelAdmin):
     list_display = ('code', 'title', 'severity', 'is_active', 'verified_by')
     list_filter = ('severity', 'is_active', 'verified_by')
-    search_fields = ('code', 'title', 'plain_english_explanation')
+    search_fields = ('code', 'title', 'summary', 'detailed_explanation')
     inlines = [TriggerKeywordInline]
     readonly_fields = ('created_at', 'updated_at')
     
@@ -18,7 +18,7 @@ class NoticeTypeAdmin(admin.ModelAdmin):
             'fields': ('code', 'title', 'is_active')
         }),
         ('Explanation', {
-            'fields': ('plain_english_explanation', 'consequences_of_ignoring', 'next_steps')
+            'fields': ('summary', 'detailed_explanation', 'why_received', 'common_mistakes', 'consequences_of_ignoring', 'next_steps', 'source_section')
         }),
         ('Classification', {
             'fields': ('severity',)

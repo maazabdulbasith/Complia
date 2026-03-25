@@ -1,6 +1,23 @@
 import type { NoticeType } from "../types/notice";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api";
+const API_BASE_RAW = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api";
+const API_BASE = API_BASE_RAW.endsWith("/api") ? API_BASE_RAW : `${API_BASE_RAW}/api`;
+
+type PaginatedNoticeResponse = {
+    count: number;
+    next: string | null;
+    previous: string | null;
+    results: NoticeType[];
+};
+
+function isPaginatedNoticeResponse(data: unknown): data is PaginatedNoticeResponse {
+    return Boolean(
+        data &&
+        typeof data === "object" &&
+        "results" in data &&
+        Array.isArray((data as PaginatedNoticeResponse).results)
+    );
+}
 
 export async function searchNotices(query: string): Promise<NoticeType[]> {
     const url = `${API_BASE}/notices/?search=${encodeURIComponent(query)}`;
@@ -12,8 +29,15 @@ export async function searchNotices(query: string): Promise<NoticeType[]> {
             throw new Error(`Failed to fetch notices: ${response.statusText}`);
         }
         const data = await response.json();
-        console.log(`Found ${data.length} results`);
-        return data;
+        if (Array.isArray(data)) {
+            console.log(`Found ${data.length} results`);
+            return data;
+        }
+        if (isPaginatedNoticeResponse(data)) {
+            console.log(`Found ${data.count} results`);
+            return data.results;
+        }
+        throw new Error("Unexpected search response format");
     } catch (error) {
         console.error("Network error connecting to API:", error);
         throw error;

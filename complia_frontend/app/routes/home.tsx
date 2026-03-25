@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Form, Link, useLoaderData } from "react-router"; // Updated import for RR7
+import { Form, Link } from "react-router";
 import { searchNotices } from "../api/client";
 import type { Route } from "./+types/home";
 
@@ -92,8 +92,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               >
                 <div className="absolute top-6 right-6">
                   <div className={`px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider border flex items-center gap-1.5 ${notice.severity === 'high' ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                      notice.severity === 'medium' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                        'bg-blue-50 text-blue-600 border-blue-100'
+                    notice.severity === 'medium' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                      'bg-blue-50 text-blue-600 border-blue-100'
                     }`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${notice.severity === 'high' ? 'bg-rose-500' : notice.severity === 'medium' ? 'bg-amber-500' : 'bg-blue-500'}`}></span>
                     {notice.severity === 'high' ? 'Action Required' : notice.severity === 'medium' ? 'Review' : 'Info'}
@@ -131,7 +131,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <div className="mt-20 text-center">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-8">Frequent Searches</h3>
             <div className="flex flex-wrap justify-center gap-3">
-              {["ASMT-10", "Return Defaulter", "Cancellation", "Short Payment (DRC-01B)", "Detention"].map((item) => (
+              {["ASMT-10", "DRC-01", "Scrutiny", "Trademark Objection", "PF Hearing"].map((item) => (
                 <Link
                   key={item}
                   to={`/?q=${encodeURIComponent(item)}`}

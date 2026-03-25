@@ -1,28 +1,73 @@
-
-# Python / Django
+# ==============================
+# Python
+# ==============================
+*.pyc
+*.pyo
+*.pyd
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Virtual environments
+complia_backend/venv/
 venv/
+.venv/
 env/
-.env
+
+# ==============================
+# Django
+# ==============================
 db.sqlite3
+db.sqlite3-journal
+staticfiles/
+static_collected/
+media/
 *.log
 
-# React / Node
-node_modules/
-dist/
-build/
-.DS_Store
-.npm
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# ==============================
+# Environment / Secrets
+# ==============================
+.env
+.env.local
+.env.production
+*.pem
+*.key
 
-# IDEs
+# ==============================
+# Node / Frontend
+# ==============================
+node_modules/
+complia_frontend/node_modules/
+complia_frontend/build/
+complia_frontend/.react-router/
+.cache/
+dist/
+
+# ==============================
+# IDE / OS
+# ==============================
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
 
-# Complia Specific
-media/
-staticfiles/
+# ==============================
+# Testing / Coverage
+# ==============================
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+.tox/
+
+# ==============================
+# Build artifacts
+# ==============================
+*.egg-info/
+build/
+dist/
+*.egg
