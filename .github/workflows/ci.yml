@@ -7,6 +7,27 @@ on:
     branches: [main, master]
 
 jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Block committed .env files
+        run: |
+          if git ls-files | grep -E '(^|/)\.env($|\.(local|production|development|test))'; then
+            echo "Committed .env file detected. Move secrets to platform env vars."
+            exit 1
+          fi
+
+      - name: Secret pattern scan (tracked files only)
+        run: |
+          # We intentionally scan tracked files only to avoid failing on local ignored files.
+          if git grep -nE '(GOCSPX-|AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY-----|xox[baprs]-)' -- . ':!.env.example'; then
+            echo "Potential secret detected in tracked files."
+            exit 1
+          fi
+
   backend:
     runs-on: ubuntu-latest
     env:
