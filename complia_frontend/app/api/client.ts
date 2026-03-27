@@ -34,7 +34,7 @@ export type CAHelpRequestPayload = {
 export type AdminMetrics = {
     total_visitors: number;
     visitors_today: number;
-    live_on_dashboard: number;
+    live_visitors: number;
     most_searched_notice: string;
     most_searched_notice_count: number;
     total_searches: number;

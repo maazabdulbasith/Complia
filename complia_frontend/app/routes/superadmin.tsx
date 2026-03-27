@@ -131,8 +131,8 @@ export default function SuperAdminDashboard() {
               <span className="font-bold text-slate-900">{metrics.total_visitors}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-600">Live on dashboard</span>
-              <span className="font-bold text-emerald-600">{metrics.live_on_dashboard}</span>
+              <span className="text-slate-600">Live visitors</span>
+              <span className="font-bold text-emerald-600">{metrics.live_visitors}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-600">Top searched</span>

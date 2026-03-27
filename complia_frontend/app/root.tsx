@@ -9,6 +9,7 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { trackEvent } from "./lib/analytics";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -42,9 +43,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { useEffect } from "react";
+import { useLocation } from "react-router";
 
 export default function App() {
   const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "";
+  const location = useLocation();
+
+  useEffect(() => {
+    trackEvent("page_view", { page: location.pathname });
+
+    const intervalId = window.setInterval(() => {
+      trackEvent("page_view", { page: location.pathname, heartbeat: true });
+    }, 30000);
+
+    return () => window.clearInterval(intervalId);
+  }, [location.pathname]);
 
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>

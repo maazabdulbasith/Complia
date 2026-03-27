@@ -121,9 +121,8 @@ class SuperAdminMetricsView(generics.GenericAPIView):
             .count()
         )
 
-        live_on_dashboard = (
+        live_visitors = (
             AnalyticsEvent.objects.filter(
-                event_name="admin_dashboard_heartbeat",
                 created_at__gte=live_window_start,
             )
             .values("session_id")
@@ -158,7 +157,7 @@ class SuperAdminMetricsView(generics.GenericAPIView):
             {
                 "total_visitors": total_visitors,
                 "visitors_today": visitors_today,
-                "live_on_dashboard": live_on_dashboard,
+                "live_visitors": live_visitors,
                 "most_searched_notice": top_notice,
                 "most_searched_notice_count": top_notice_count,
                 "total_searches": total_searches,

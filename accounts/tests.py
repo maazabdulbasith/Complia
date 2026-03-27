@@ -96,6 +96,7 @@ class AnalyticsTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["most_searched_notice"], "DRC-01")
         self.assertGreaterEqual(response.data["total_visitors"], 1)
+        self.assertGreaterEqual(response.data["live_visitors"], 1)
 
 
 class GoogleLoginTests(APITestCase):
