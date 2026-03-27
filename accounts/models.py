@@ -93,3 +93,36 @@ class CAHelpRequest(models.Model):
 
     def __str__(self):
         return f"{self.email} - {self.notice_code or 'general'} ({self.status})"
+
+
+class AnalyticsEvent(models.Model):
+    EVENT_CHOICES = (
+        ("page_view", "Page View"),
+        ("notice_search", "Notice Search"),
+        ("search_result_clicked", "Search Result Clicked"),
+        ("notice_detail_viewed", "Notice Detail Viewed"),
+        ("notice_saved", "Notice Saved"),
+        ("notice_unsaved", "Notice Unsaved"),
+        ("ca_help_submitted", "CA Help Submitted"),
+        ("admin_dashboard_viewed", "Admin Dashboard Viewed"),
+        ("admin_dashboard_heartbeat", "Admin Dashboard Heartbeat"),
+    )
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="analytics_events",
+    )
+    session_id = models.CharField(max_length=64, db_index=True)
+    event_name = models.CharField(max_length=64, choices=EVENT_CHOICES, db_index=True)
+    path = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.event_name} ({self.session_id})"

@@ -1,8 +1,9 @@
 from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
+from unittest.mock import Mock, patch
 
-from .models import User
+from .models import AnalyticsEvent, User
 
 
 class UserModelTests(TestCase):
@@ -53,3 +54,67 @@ class CAHelpRequestTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["status"], "error")
         self.assertIn("phone_number", response.data["errors"])
+
+
+class AnalyticsTests(APITestCase):
+    def test_create_analytics_event_anonymous(self):
+        payload = {
+            "event_name": "page_view",
+            "path": "/",
+            "session_id": "sess-12345678",
+            "metadata": {"page": "home"},
+        }
+        response = self.client.post("/api/v1/analytics/events/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(AnalyticsEvent.objects.count(), 1)
+
+    def test_superadmin_metrics_requires_admin(self):
+        user = User.objects.create_user(email="user@complia.in", password="pass123456", user_type="taxpayer")
+        self.client.force_authenticate(user=user)
+        response = self.client.get("/api/v1/admin/metrics/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_superadmin_metrics_admin_access(self):
+        admin = User.objects.create_user(email="admin@complia.in", password="pass123456", user_type="admin")
+        AnalyticsEvent.objects.create(
+            user=admin,
+            event_name="notice_search",
+            session_id="sess-a1b2c3d4",
+            path="/",
+            metadata={"query": "DRC-01"},
+        )
+        AnalyticsEvent.objects.create(
+            user=admin,
+            event_name="admin_dashboard_heartbeat",
+            session_id="sess-a1b2c3d4",
+            path="/superadmin",
+            metadata={},
+        )
+
+        self.client.force_authenticate(user=admin)
+        response = self.client.get("/api/v1/admin/metrics/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["most_searched_notice"], "DRC-01")
+        self.assertGreaterEqual(response.data["total_visitors"], 1)
+
+
+class GoogleLoginTests(APITestCase):
+    @patch("accounts.views.requests.get")
+    def test_google_login_success(self, mock_get):
+        mock_resp = Mock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "email": "newuser@complia.in",
+            "given_name": "New",
+            "family_name": "User",
+        }
+        mock_get.return_value = mock_resp
+
+        response = self.client.post("/api/v1/auth/google/", {"access_token": "token123"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        self.assertEqual(response.data["user"]["email"], "newuser@complia.in")
+
+    def test_google_login_missing_access_token(self):
+        response = self.client.post("/api/v1/auth/google/", {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

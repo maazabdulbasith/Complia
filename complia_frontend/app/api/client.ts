@@ -31,6 +31,17 @@ export type CAHelpRequestPayload = {
     message?: string;
 };
 
+export type AdminMetrics = {
+    total_visitors: number;
+    visitors_today: number;
+    live_on_dashboard: number;
+    most_searched_notice: string;
+    most_searched_notice_count: number;
+    total_searches: number;
+    total_notice_views: number;
+    ca_help_submissions: number;
+};
+
 type ApiErrorEnvelope = {
     status?: string;
     message?: string;
@@ -188,4 +199,36 @@ export async function submitCAHelpRequest(payload: CAHelpRequestPayload): Promis
     if (!response.ok) {
         throw new Error(await getApiErrorMessage(response, "Failed to submit CA help request"));
     }
+}
+
+export async function sendAnalyticsEvent(payload: {
+    event_name: string;
+    path?: string;
+    metadata?: Record<string, unknown>;
+    session_id: string;
+}): Promise<void> {
+    try {
+        await fetch(`${API_BASE}/analytics/events/`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                ...getAuthHeaders(),
+            },
+            body: JSON.stringify(payload),
+        });
+    } catch {
+        // Analytics failures should never block user flow.
+    }
+}
+
+export async function getSuperAdminMetrics(): Promise<AdminMetrics> {
+    const response = await fetch(`${API_BASE}/admin/metrics/`, {
+        headers: {
+            ...getAuthHeaders(),
+        },
+    });
+    if (!response.ok) {
+        throw new Error(await getApiErrorMessage(response, "Failed to fetch admin metrics"));
+    }
+    return response.json();
 }

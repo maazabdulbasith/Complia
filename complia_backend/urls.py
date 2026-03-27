@@ -7,7 +7,7 @@ from rest_framework_simplejwt.views import (
 )
 from complia_backend.notices.views import FeedbackViewSet, NoticeTypeViewSet, SavedNoticeViewSet
 from complia_backend.health import health_check, readiness_check
-from accounts.views import CAHelpRequestCreateView, GoogleLogin
+from accounts.views import AnalyticsEventCreateView, CAHelpRequestCreateView, GoogleLogin, SuperAdminMetricsView
 
 # API v1 Router
 router_v1 = routers.DefaultRouter()
@@ -24,6 +24,8 @@ urlpatterns = [
     path('api/v1/', include([
         path('', include(router_v1.urls)),
         path('ca-help/', CAHelpRequestCreateView.as_view(), name='ca-help-create'),
+        path('analytics/events/', AnalyticsEventCreateView.as_view(), name='analytics-event-create'),
+        path('admin/metrics/', SuperAdminMetricsView.as_view(), name='superadmin-metrics'),
         
         # Authentication & Accounts
         path('auth/', include([

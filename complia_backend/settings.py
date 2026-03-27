@@ -160,6 +160,8 @@ REST_FRAMEWORK = {
         "user": "1000/hour",
         "feedback": "30/hour",
         "ca_help": "20/hour",
+        "analytics_event": "300/hour",
+        "admin_metrics": "600/hour",
     },
     "EXCEPTION_HANDLER": "complia_backend.exceptions.custom_exception_handler",
 }

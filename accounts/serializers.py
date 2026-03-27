@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CAHelpRequest, User
+from .models import AnalyticsEvent, CAHelpRequest, User
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
@@ -53,4 +53,21 @@ class CAHelpRequestSerializer(serializers.ModelSerializer):
 
         if not normalized.isdigit() or not 10 <= len(normalized) <= 15:
             raise serializers.ValidationError("Phone number must be 10 to 15 digits.")
+        return cleaned
+
+
+class AnalyticsEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AnalyticsEvent
+        fields = [
+            "event_name",
+            "path",
+            "metadata",
+            "session_id",
+        ]
+
+    def validate_session_id(self, value):
+        cleaned = value.strip()
+        if len(cleaned) < 8:
+            raise serializers.ValidationError("Invalid session id.")
         return cleaned

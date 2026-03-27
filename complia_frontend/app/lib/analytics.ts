@@ -1,3 +1,5 @@
+import { sendAnalyticsEvent } from "../api/client";
+
 type AnalyticsProperties = Record<string, string | number | boolean | null | undefined>;
 
 type GtagEvent = (
@@ -24,6 +26,18 @@ function analyticsEnabled(): boolean {
   return import.meta.env.PROD;
 }
 
+function getSessionId(): string {
+  const key = "complia_session_id";
+  const existing = localStorage.getItem(key);
+  if (existing) {
+    return existing;
+  }
+
+  const generated = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  localStorage.setItem(key, generated);
+  return generated;
+}
+
 export function trackEvent(eventName: string, properties: AnalyticsProperties = {}): void {
   if (!analyticsEnabled() || typeof window === "undefined") {
     return;
@@ -38,6 +52,13 @@ export function trackEvent(eventName: string, properties: AnalyticsProperties = 
     if (window.gtag) {
       window.gtag("event", eventName, properties);
     }
+
+    void sendAnalyticsEvent({
+      event_name: eventName,
+      path: window.location.pathname,
+      metadata: properties,
+      session_id: getSessionId(),
+    });
   } catch {
     // Analytics must never block product interactions.
   }

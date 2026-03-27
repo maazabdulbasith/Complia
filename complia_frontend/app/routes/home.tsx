@@ -43,7 +43,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const navigation = useNavigation();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState(query || "");
-  const [user, setUser] = useState<{ email: string } | null>(null);
+  const [user, setUser] = useState<{ email: string; user_type?: string } | null>(null);
   const isLoading = navigation.state === "loading";
 
   useEffect(() => {
@@ -55,6 +55,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         localStorage.removeItem("user");
       }
     }
+    trackEvent("page_view", { page: "home" });
   }, []);
 
   useEffect(() => {
@@ -86,6 +87,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <div className="flex items-center gap-4">
           {user ? (
             <div className="flex items-center gap-3">
+               {user.user_type === "admin" && (
+                 <Link
+                   to="/superadmin"
+                   className="hidden sm:inline-flex px-3 py-1.5 rounded-lg border border-indigo-200 text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:border-indigo-300 transition-all"
+                 >
+                   SuperAdmin
+                 </Link>
+               )}
                <Link
                  to="/saved"
                  className="hidden sm:inline-flex px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-all"
