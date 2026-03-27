@@ -78,6 +78,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
   const handleLogout = () => {
     localStorage.removeItem("complia_token");
+    localStorage.removeItem("complia_refresh_token");
     localStorage.removeItem("user");
     setUser(null);
     navigate("/");

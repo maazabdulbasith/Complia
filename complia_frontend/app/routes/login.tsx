@@ -32,6 +32,9 @@ export default function LoginPage() {
 
         const data = await backendResponse.json();
         localStorage.setItem("complia_token", data.access);
+        if (data.refresh) {
+          localStorage.setItem("complia_refresh_token", data.refresh);
+        }
         if (data.user) {
           localStorage.setItem("user", JSON.stringify(data.user));
         } else {

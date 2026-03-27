@@ -2,6 +2,8 @@ import type { NoticeType } from "../types/notice";
 
 const API_BASE_RAW = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api/v1";
 const API_BASE = API_BASE_RAW.endsWith("/api/v1") ? API_BASE_RAW : `${API_BASE_RAW}/api/v1`;
+const ACCESS_TOKEN_KEY = "complia_token";
+const REFRESH_TOKEN_KEY = "complia_refresh_token";
 
 type PaginatedNoticeResponse = {
     count: number;
@@ -106,8 +108,90 @@ function isPaginatedSavedNoticeResponse(data: unknown): data is PaginatedSavedNo
 }
 
 function getAuthHeaders(): Record<string, string> {
-    const token = localStorage.getItem("complia_token");
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
     return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function normalizeHeaders(headers?: HeadersInit): Record<string, string> {
+    const normalized: Record<string, string> = {};
+    if (!headers) {
+        return normalized;
+    }
+    const source = new Headers(headers);
+    source.forEach((value, key) => {
+        normalized[key] = value;
+    });
+    return normalized;
+}
+
+function clearStoredAuth(): void {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem("user");
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+    const refresh = localStorage.getItem(REFRESH_TOKEN_KEY);
+    if (!refresh) {
+        return null;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/auth/token/refresh/`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refresh }),
+        });
+
+        if (!response.ok) {
+            clearStoredAuth();
+            return null;
+        }
+
+        const data = (await response.json()) as { access?: string; refresh?: string };
+        if (!data.access) {
+            clearStoredAuth();
+            return null;
+        }
+
+        localStorage.setItem(ACCESS_TOKEN_KEY, data.access);
+        if (data.refresh) {
+            localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh);
+        }
+        return data.access;
+    } catch {
+        clearStoredAuth();
+        return null;
+    }
+}
+
+async function fetchWithAuth(url: string, init: RequestInit = {}): Promise<Response> {
+    const baseHeaders = normalizeHeaders(init.headers);
+    let response = await fetch(url, {
+        ...init,
+        headers: {
+            ...baseHeaders,
+            ...getAuthHeaders(),
+        },
+    });
+
+    if (response.status !== 401) {
+        return response;
+    }
+
+    const nextAccessToken = await refreshAccessToken();
+    if (!nextAccessToken) {
+        return response;
+    }
+
+    response = await fetch(url, {
+        ...init,
+        headers: {
+            ...baseHeaders,
+            Authorization: `Bearer ${nextAccessToken}`,
+        },
+    });
+    return response;
 }
 
 async function getApiErrorMessage(response: Response, fallback: string): Promise<string> {
@@ -180,11 +264,7 @@ export async function submitFeedback(noticeId: number, isHelpful: boolean, comme
 }
 
 export async function getSavedNotices(): Promise<SavedNotice[]> {
-    const response = await fetch(`${API_BASE}/saved-notices/`, {
-        headers: {
-            ...getAuthHeaders(),
-        },
-    });
+    const response = await fetchWithAuth(`${API_BASE}/saved-notices/`);
     if (!response.ok) {
         throw new Error(await getApiErrorMessage(response, "Failed to fetch saved notices"));
     }
@@ -199,11 +279,10 @@ export async function getSavedNotices(): Promise<SavedNotice[]> {
 }
 
 export async function saveNotice(noticeId: number): Promise<void> {
-    const response = await fetch(`${API_BASE}/saved-notices/`, {
+    const response = await fetchWithAuth(`${API_BASE}/saved-notices/`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            ...getAuthHeaders(),
         },
         body: JSON.stringify({ notice_id: noticeId }),
     });
@@ -213,11 +292,8 @@ export async function saveNotice(noticeId: number): Promise<void> {
 }
 
 export async function removeSavedNotice(savedNoticeId: number): Promise<void> {
-    const response = await fetch(`${API_BASE}/saved-notices/${savedNoticeId}/`, {
+    const response = await fetchWithAuth(`${API_BASE}/saved-notices/${savedNoticeId}/`, {
         method: "DELETE",
-        headers: {
-            ...getAuthHeaders(),
-        },
     });
     if (!response.ok) {
         throw new Error(await getApiErrorMessage(response, "Failed to remove saved notice"));
@@ -225,11 +301,10 @@ export async function removeSavedNotice(savedNoticeId: number): Promise<void> {
 }
 
 export async function submitCAHelpRequest(payload: CAHelpRequestPayload): Promise<void> {
-    const response = await fetch(`${API_BASE}/ca-help/`, {
+    const response = await fetchWithAuth(`${API_BASE}/ca-help/`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            ...getAuthHeaders(),
         },
         body: JSON.stringify(payload),
     });
@@ -263,11 +338,7 @@ export async function sendAnalyticsEvent(payload: {
 }
 
 export async function getSuperAdminMetrics(): Promise<AdminMetrics> {
-    const response = await fetch(`${API_BASE}/admin/metrics/`, {
-        headers: {
-            ...getAuthHeaders(),
-        },
-    });
+    const response = await fetchWithAuth(`${API_BASE}/admin/metrics/`);
     if (!response.ok) {
         throw new Error(await getApiErrorMessage(response, "Failed to fetch admin metrics"));
     }
@@ -276,11 +347,7 @@ export async function getSuperAdminMetrics(): Promise<AdminMetrics> {
 
 export async function getAdminCARequests(status?: string): Promise<AdminCARequest[]> {
     const query = status ? `?status=${encodeURIComponent(status)}` : "";
-    const response = await fetch(`${API_BASE}/admin/ca-requests/${query}`, {
-        headers: {
-            ...getAuthHeaders(),
-        },
-    });
+    const response = await fetchWithAuth(`${API_BASE}/admin/ca-requests/${query}`);
     if (!response.ok) {
         throw new Error(await getApiErrorMessage(response, "Failed to fetch CA requests"));
     }
@@ -298,11 +365,10 @@ export async function updateAdminCARequest(
     requestId: number,
     payload: Partial<Pick<AdminCARequest, "status" | "priority" | "assigned_to_email" | "internal_notes">>
 ): Promise<AdminCARequest> {
-    const response = await fetch(`${API_BASE}/admin/ca-requests/${requestId}/`, {
+    const response = await fetchWithAuth(`${API_BASE}/admin/ca-requests/${requestId}/`, {
         method: "PATCH",
         headers: {
             "Content-Type": "application/json",
-            ...getAuthHeaders(),
         },
         body: JSON.stringify(payload),
     });
@@ -314,11 +380,7 @@ export async function updateAdminCARequest(
 
 export async function getAdminFeedbackItems(status?: string): Promise<AdminFeedbackItem[]> {
     const query = status ? `?status=${encodeURIComponent(status)}` : "";
-    const response = await fetch(`${API_BASE}/admin/feedback/${query}`, {
-        headers: {
-            ...getAuthHeaders(),
-        },
-    });
+    const response = await fetchWithAuth(`${API_BASE}/admin/feedback/${query}`);
     if (!response.ok) {
         throw new Error(await getApiErrorMessage(response, "Failed to fetch feedback"));
     }
@@ -336,11 +398,10 @@ export async function updateAdminFeedbackItem(
     feedbackId: number,
     payload: Partial<Pick<AdminFeedbackItem, "status" | "internal_notes">>
 ): Promise<AdminFeedbackItem> {
-    const response = await fetch(`${API_BASE}/admin/feedback/${feedbackId}/`, {
+    const response = await fetchWithAuth(`${API_BASE}/admin/feedback/${feedbackId}/`, {
         method: "PATCH",
         headers: {
             "Content-Type": "application/json",
-            ...getAuthHeaders(),
         },
         body: JSON.stringify(payload),
     });
