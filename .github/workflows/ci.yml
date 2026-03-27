@@ -23,7 +23,7 @@ jobs:
       - name: Secret pattern scan (tracked files only)
         run: |
           # We intentionally scan tracked files only to avoid failing on local ignored files.
-          if git grep -nE '(GOCSPX-|AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY-----|xox[baprs]-)' -- . ':!.env.example'; then
+          if git grep -nE '(GOCSPX-|AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY-----|xox[baprs]-)' -- . ':!.env.example' ':!.github/workflows/*'; then
             echo "Potential secret detected in tracked files."
             exit 1
           fi
