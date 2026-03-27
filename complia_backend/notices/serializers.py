@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import NoticeType, NoticeFeedback, TriggerKeyword
+from .models import NoticeType, NoticeFeedback, SavedNotice, TriggerKeyword
 
 class TriggerKeywordSerializer(serializers.ModelSerializer):
     class Meta:
@@ -23,3 +23,26 @@ class FeedbackSerializer(serializers.ModelSerializer):
         model = NoticeFeedback
         fields = ['notice', 'is_helpful', 'comments', 'created_at']
 
+    def validate(self, attrs):
+        is_helpful = attrs.get("is_helpful")
+        comments = (attrs.get("comments") or "").strip()
+
+        if is_helpful is False and not comments:
+            raise serializers.ValidationError(
+                {"comments": ["Please tell us what was unclear."]}
+            )
+
+        return attrs
+
+
+class SavedNoticeSerializer(serializers.ModelSerializer):
+    notice = NoticeTypeSerializer(read_only=True)
+    notice_id = serializers.PrimaryKeyRelatedField(
+        queryset=NoticeType.objects.filter(is_active=True),
+        source="notice",
+        write_only=True,
+    )
+
+    class Meta:
+        model = SavedNotice
+        fields = ["id", "notice", "notice_id", "created_at"]

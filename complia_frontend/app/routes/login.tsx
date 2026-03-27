@@ -1,18 +1,25 @@
 import { useGoogleLogin } from "@react-oauth/google";
-import { useNavigate, Link } from "react-router";
+import { useNavigate, Link, useSearchParams } from "react-router";
 import { useState } from "react";
+import { jwtDecode } from "jwt-decode";
+import { trackEvent } from "../lib/analytics";
+
+const API_BASE_RAW = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api/v1";
+const API_BASE = API_BASE_RAW.endsWith("/api/v1") ? API_BASE_RAW : `${API_BASE_RAW}/api/v1`;
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const googleConfigured = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
 
   const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       setLoading(true);
       setError(null);
       try {
-        const backendResponse = await fetch("http://localhost:8001/api/v1/auth/google/", {
+        const backendResponse = await fetch(`${API_BASE}/auth/google/`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ access_token: tokenResponse.access_token }),
@@ -26,16 +33,27 @@ export default function LoginPage() {
 
         const data = await backendResponse.json();
         localStorage.setItem("complia_token", data.access);
-        localStorage.setItem("user", JSON.stringify(data.user));
-        navigate("/");
+        if (data.user) {
+          localStorage.setItem("user", JSON.stringify(data.user));
+        } else {
+          const decoded = jwtDecode<{ email?: string }>(data.access);
+          localStorage.setItem("user", JSON.stringify({ email: decoded.email || "User" }));
+        }
+        trackEvent("login_success", { provider: "google" });
+        const next = searchParams.get("next") || "/";
+        navigate(next);
       } catch (err) {
         console.error(err);
+        trackEvent("login_failed", { provider: "google" });
         setError("Something went wrong. Please try again.");
       } finally {
         setLoading(false);
       }
     },
-    onError: () => setError("Google Sign-In was cancelled or failed."),
+    onError: () => {
+      trackEvent("login_failed", { provider: "google" });
+      setError("Google Sign-In was cancelled or failed.");
+    },
     flow: "implicit",
   });
 
@@ -86,8 +104,14 @@ export default function LoginPage() {
           <div className="flex flex-col gap-4">
             {/* Google Sign-In Button */}
             <button
-              onClick={() => googleLogin()}
-              disabled={loading}
+              onClick={() => {
+                if (!googleConfigured) {
+                  setError("Google sign-in is not configured for this environment.");
+                  return;
+                }
+                googleLogin();
+              }}
+              disabled={loading || !googleConfigured}
               className="group relative w-full py-4 px-6 bg-white rounded-xl font-semibold text-gray-800 transition-all hover:shadow-lg hover:shadow-white/10 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-3"
             >
               {loading ? (
@@ -102,6 +126,11 @@ export default function LoginPage() {
               )}
               {loading ? "Signing in..." : "Continue with Google"}
             </button>
+            {!googleConfigured && (
+              <p className="text-xs text-amber-300 text-center">
+                Google OAuth is disabled. Set <code>VITE_GOOGLE_CLIENT_ID</code> to enable it.
+              </p>
+            )}
 
             {/* Divider */}
             <div className="relative my-2">

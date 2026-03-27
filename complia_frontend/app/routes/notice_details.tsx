@@ -1,7 +1,8 @@
 import type { Route } from "./+types/notice_details";
-import { getNotice, submitFeedback } from "../api/client";
+import { getNotice, getSavedNotices, removeSavedNotice, saveNotice, submitFeedback } from "../api/client";
+import { trackEvent } from "../lib/analytics";
 import { Link } from "react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export async function loader({ params }: Route.LoaderArgs) {
     const notice = await getNotice(params.id);
@@ -13,13 +14,78 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
     const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
     const [showCommentInput, setShowCommentInput] = useState(false);
     const [comment, setComment] = useState("");
+    const [feedbackError, setFeedbackError] = useState<string | null>(null);
+    const [savedNoticeId, setSavedNoticeId] = useState<number | null>(null);
+    const [saveLoading, setSaveLoading] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const isLoggedIn = useMemo(() => Boolean(localStorage.getItem("complia_token")), []);
 
     const handleFeedback = async (isHelpful: boolean, text?: string) => {
+        if (!isHelpful && !(text || "").trim()) {
+            setFeedbackError("Please tell us what was unclear before submitting.");
+            return;
+        }
         try {
             await submitFeedback(notice.id, isHelpful, text);
             setFeedbackSubmitted(true);
+            setFeedbackError(null);
+            trackEvent("notice_feedback_submitted", {
+                notice_code: notice.code,
+                is_helpful: isHelpful,
+            });
         } catch (error) {
             console.error("Feedback failed", error);
+            setFeedbackError("Could not submit feedback. Please retry.");
+        }
+    };
+
+    useEffect(() => {
+        trackEvent("notice_detail_viewed", {
+            notice_code: notice.code,
+            severity: notice.severity,
+        });
+    }, [notice.code, notice.severity]);
+
+    useEffect(() => {
+        if (!isLoggedIn) {
+            return;
+        }
+        const loadSavedState = async () => {
+            try {
+                const saved = await getSavedNotices();
+                const match = saved.find((item) => item.notice.id === notice.id);
+                setSavedNoticeId(match ? match.id : null);
+            } catch (error) {
+                console.error("Failed to fetch saved notices", error);
+            }
+        };
+        loadSavedState();
+    }, [isLoggedIn, notice.id]);
+
+    const handleSaveToggle = async () => {
+        if (!isLoggedIn) {
+            setSaveError("Sign in to save this notice.");
+            return;
+        }
+        setSaveLoading(true);
+        setSaveError(null);
+        try {
+            if (savedNoticeId) {
+                await removeSavedNotice(savedNoticeId);
+                setSavedNoticeId(null);
+                trackEvent("notice_unsaved", { notice_code: notice.code });
+            } else {
+                await saveNotice(notice.id);
+                const saved = await getSavedNotices();
+                const match = saved.find((item) => item.notice.id === notice.id);
+                setSavedNoticeId(match ? match.id : null);
+                trackEvent("notice_saved", { notice_code: notice.code });
+            }
+        } catch (error) {
+            console.error(error);
+            setSaveError("Could not update saved status. Please retry.");
+        } finally {
+            setSaveLoading(false);
         }
     };
 
@@ -141,10 +207,24 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
 
                         {/* CTA */}
                         <div className="flex flex-col items-center justify-center pt-8 border-t border-slate-100">
-                            <p className="text-slate-400 font-medium mb-6">Need professional help?</p>
-                            <button className="bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 px-8 py-4 rounded-xl font-bold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 w-full md:w-auto">
-                                Find a Chartered Accountant
+                            <button
+                                onClick={handleSaveToggle}
+                                disabled={saveLoading}
+                                className="mb-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 w-full md:w-auto"
+                            >
+                                {saveLoading ? "Updating..." : savedNoticeId ? "Saved ✓ (Remove)" : "Save This Notice"}
                             </button>
+                            {saveError && (
+                                <p className="mb-4 text-sm text-rose-600">{saveError}</p>
+                            )}
+                            <p className="text-slate-400 font-medium mb-6">Need professional help?</p>
+                            <Link
+                                to={`/ca-help?notice=${encodeURIComponent(notice.code)}`}
+                                onClick={() => trackEvent("ca_help_cta_clicked", { notice_code: notice.code })}
+                                className="bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 px-8 py-4 rounded-xl font-bold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 w-full md:w-auto text-center"
+                            >
+                                Find a Chartered Accountant
+                            </Link>
                         </div>
 
                     </div>
@@ -165,7 +245,10 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
                                     👍 Yes
                                 </button>
                                 <button
-                                    onClick={() => setShowCommentInput(true)}
+                                    onClick={() => {
+                                        setShowCommentInput(true);
+                                        setFeedbackError(null);
+                                    }}
                                     className="px-8 py-3 bg-blue-700/50 text-white hover:bg-blue-700 border border-blue-500/50 rounded-xl transition-all font-bold shadow-sm"
                                 >
                                     👎 No
@@ -182,7 +265,7 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
                                 >
                                     <textarea
                                         className="w-full bg-blue-800/50 border border-blue-500/50 rounded-xl p-4 text-white placeholder:text-blue-200 focus:outline-none focus:ring-2 focus:ring-white/50 shadow-inner"
-                                        placeholder="What was unclear? (Optional)"
+                                        placeholder="What was unclear?"
                                         rows={3}
                                         value={comment}
                                         onChange={(e) => setComment(e.target.value)}
@@ -194,6 +277,9 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
                                         Submit
                                     </button>
                                 </form>
+                            )}
+                            {feedbackError && (
+                                <p className="mt-4 text-sm text-rose-100">{feedbackError}</p>
                             )}
                         </div>
                     ) : (

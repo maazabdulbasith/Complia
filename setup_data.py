@@ -464,10 +464,13 @@ def seed_data():
         "is_active": True
     }, ["Red Light", "Signal Jump"])
 
-    # Create superuser if not exists
-    if not User.objects.filter(email='admin@complia.in').exists():
-        User.objects.create_superuser('admin@complia.in', 'password123')
-        print("Superuser 'admin@complia.in' created.")
+    # Optional superuser bootstrap for local development.
+    admin_email = os.getenv("SEED_ADMIN_EMAIL")
+    admin_password = os.getenv("SEED_ADMIN_PASSWORD")
+    if admin_email and admin_password:
+        if not User.objects.filter(email=admin_email).exists():
+            User.objects.create_superuser(admin_email, admin_password)
+            print(f"Superuser '{admin_email}' created from environment variables.")
     
     print("Data seeded successfully!")
 
