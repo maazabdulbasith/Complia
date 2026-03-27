@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.db.models import Count
 from django.utils import timezone
 import requests
@@ -57,6 +58,20 @@ class GoogleLogin(APIView):
                 "user_type": "taxpayer",
             },
         )
+
+        if email.lower() in settings.SUPERADMIN_EMAILS:
+            fields_to_update = []
+            if user.user_type != "admin":
+                user.user_type = "admin"
+                fields_to_update.append("user_type")
+            if not user.is_staff:
+                user.is_staff = True
+                fields_to_update.append("is_staff")
+            if not user.is_superuser:
+                user.is_superuser = True
+                fields_to_update.append("is_superuser")
+            if fields_to_update:
+                user.save(update_fields=fields_to_update)
 
         refresh = RefreshToken.for_user(user)
         return Response(

@@ -35,6 +35,7 @@ ALLOWED_HOSTS = _env_list("ALLOWED_HOSTS", "localhost,127.0.0.1")
 # CORS/CSRF should always be explicit in deployed environments.
 CORS_ALLOWED_ORIGINS = _env_list("CORS_ALLOWED_ORIGINS")
 CSRF_TRUSTED_ORIGINS = _env_list("CSRF_TRUSTED_ORIGINS")
+SUPERADMIN_EMAILS = {email.lower() for email in _env_list("SUPERADMIN_EMAILS")}
 
 
 # ==============================

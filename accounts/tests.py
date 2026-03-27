@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 from unittest.mock import Mock, patch
@@ -118,3 +118,23 @@ class GoogleLoginTests(APITestCase):
     def test_google_login_missing_access_token(self):
         response = self.client.post("/api/v1/auth/google/", {}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @override_settings(SUPERADMIN_EMAILS={"maazabdulbasith@gmail.com"})
+    @patch("accounts.views.requests.get")
+    def test_google_login_superadmin_auto_promote(self, mock_get):
+        mock_resp = Mock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "email": "maazabdulbasith@gmail.com",
+            "given_name": "Maaz",
+            "family_name": "Abdul Basith",
+        }
+        mock_get.return_value = mock_resp
+
+        response = self.client.post("/api/v1/auth/google/", {"access_token": "token123"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        user = User.objects.get(email="maazabdulbasith@gmail.com")
+        self.assertEqual(user.user_type, "admin")
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.is_superuser)
