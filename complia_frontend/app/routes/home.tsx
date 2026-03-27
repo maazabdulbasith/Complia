@@ -11,7 +11,7 @@ export function meta({ }: Route.MetaArgs) {
   ];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const url = new URL(request.url);
   const q = url.searchParams.get("q");
   if (!q) return { results: [], query: "" };

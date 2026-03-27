@@ -4,7 +4,7 @@ import { trackEvent } from "../lib/analytics";
 import { Link } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 
-export async function loader({ params }: Route.LoaderArgs) {
+export async function clientLoader({ params }: Route.ClientLoaderArgs) {
     const notice = await getNotice(params.id);
     return { notice };
 }
