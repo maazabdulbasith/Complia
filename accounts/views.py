@@ -4,23 +4,20 @@ from django.conf import settings
 from django.db.models import Count
 from django.utils import timezone
 import requests
-from rest_framework import generics, permissions, status
+from rest_framework import filters, generics, mixins, permissions, status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.throttling import ScopedRateThrottle
 
-from .models import AnalyticsEvent, User
-from .serializers import AnalyticsEventSerializer, CAHelpRequestSerializer, UserDetailSerializer
-
-
-class IsSuperAdmin(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and (request.user.is_superuser or getattr(request.user, "user_type", "") == "admin")
-        )
+from .models import AnalyticsEvent, CAHelpRequest, User
+from .permissions import IsSuperAdmin
+from .serializers import (
+    AdminCAHelpRequestSerializer,
+    AnalyticsEventSerializer,
+    CAHelpRequestSerializer,
+    UserDetailSerializer,
+)
 
 
 class GoogleLogin(APIView):
@@ -165,3 +162,43 @@ class SuperAdminMetricsView(generics.GenericAPIView):
                 "ca_help_submissions": total_ca_help_submissions,
             }
         )
+
+
+class SuperAdminCAHelpRequestViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = AdminCAHelpRequestSerializer
+    permission_classes = [IsSuperAdmin]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "admin_ops"
+    queryset = CAHelpRequest.objects.all()
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["name", "email", "notice_code", "phone_number", "message", "internal_notes"]
+    ordering_fields = ["created_at", "updated_at", "status", "priority"]
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        return queryset
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        old_status = instance.status
+        updated = serializer.save()
+
+        if old_status != updated.status:
+            updates = []
+            if updated.status == "contacted" and not updated.contacted_at:
+                updated.contacted_at = timezone.now()
+                updates.append("contacted_at")
+            if updated.status in {"resolved", "closed"} and not updated.closed_at:
+                updated.closed_at = timezone.now()
+                updates.append("closed_at")
+            if updates:
+                updated.save(update_fields=updates)

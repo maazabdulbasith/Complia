@@ -69,8 +69,15 @@ class User(AbstractUser):
 class CAHelpRequest(models.Model):
     STATUS_CHOICES = (
         ("new", "New"),
+        ("triaged", "Triaged"),
         ("contacted", "Contacted"),
+        ("resolved", "Resolved"),
         ("closed", "Closed"),
+    )
+    PRIORITY_CHOICES = (
+        ("low", "Low"),
+        ("medium", "Medium"),
+        ("high", "High"),
     )
 
     user = models.ForeignKey(
@@ -86,7 +93,13 @@ class CAHelpRequest(models.Model):
     phone_number = models.CharField(max_length=20, blank=True)
     message = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="new")
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default="medium")
+    assigned_to_email = models.EmailField(blank=True)
+    internal_notes = models.TextField(blank=True)
+    contacted_at = models.DateTimeField(null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -106,6 +119,8 @@ class AnalyticsEvent(models.Model):
         ("ca_help_submitted", "CA Help Submitted"),
         ("admin_dashboard_viewed", "Admin Dashboard Viewed"),
         ("admin_dashboard_heartbeat", "Admin Dashboard Heartbeat"),
+        ("admin_ca_request_updated", "Admin CA Request Updated"),
+        ("admin_feedback_updated", "Admin Feedback Updated"),
     )
 
     user = models.ForeignKey(

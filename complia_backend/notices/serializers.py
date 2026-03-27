@@ -35,6 +35,27 @@ class FeedbackSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class AdminFeedbackSerializer(serializers.ModelSerializer):
+    notice_code = serializers.CharField(source="notice.code", read_only=True)
+    notice_title = serializers.CharField(source="notice.title", read_only=True)
+
+    class Meta:
+        model = NoticeFeedback
+        fields = [
+            "id",
+            "notice",
+            "notice_code",
+            "notice_title",
+            "is_helpful",
+            "comments",
+            "status",
+            "internal_notes",
+            "reviewed_at",
+            "created_at",
+        ]
+        read_only_fields = ["id", "notice", "notice_code", "notice_title", "reviewed_at", "created_at"]
+
+
 class SavedNoticeSerializer(serializers.ModelSerializer):
     notice = NoticeTypeSerializer(read_only=True)
     notice_id = serializers.PrimaryKeyRelatedField(

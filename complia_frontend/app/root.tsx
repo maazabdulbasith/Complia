@@ -1,4 +1,4 @@
-import {
+﻿import {
   isRouteErrorResponse,
   Links,
   Meta,
@@ -20,7 +20,7 @@ export const links: Route.LinksFunction = () => [
   },
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap",
   },
 ];
 
@@ -84,11 +84,11 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
 
   return (
-    <main className="pt-16 p-4 container mx-auto">
-      <h1>{message}</h1>
-      <p>{details}</p>
+    <main className="mx-auto max-w-2xl p-8 pt-16 text-slate-900">
+      <h1 className="text-3xl font-bold tracking-tight">{message}</h1>
+      <p className="mt-2 text-slate-600">{details}</p>
       {stack && (
-        <pre className="w-full p-4 overflow-x-auto">
+        <pre className="mt-6 w-full overflow-x-auto rounded-xl border border-slate-200 bg-white p-4 text-xs">
           <code>{stack}</code>
         </pre>
       )}

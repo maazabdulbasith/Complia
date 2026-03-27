@@ -3,7 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from unittest.mock import Mock, patch
 
-from .models import AnalyticsEvent, User
+from .models import AnalyticsEvent, CAHelpRequest, User
 
 
 class UserModelTests(TestCase):
@@ -139,3 +139,41 @@ class GoogleLoginTests(APITestCase):
         self.assertEqual(user.user_type, "admin")
         self.assertTrue(user.is_staff)
         self.assertTrue(user.is_superuser)
+
+
+class SuperAdminCARequestOpsTests(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(email="admin@complia.in", password="pass123456", user_type="admin")
+        self.user = User.objects.create_user(email="user@complia.in", password="pass123456", user_type="taxpayer")
+        self.request_item = CAHelpRequest.objects.create(
+            user=self.user,
+            notice_code="GST-DRC-01",
+            name="Ravi Kumar",
+            email="ravi@example.com",
+            phone_number="9876543210",
+            message="Need urgent help",
+            status="new",
+        )
+
+    def test_non_admin_cannot_list_ca_requests(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get("/api/v1/admin/ca-requests/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_can_list_and_update_ca_requests(self):
+        self.client.force_authenticate(user=self.admin)
+        list_response = self.client.get("/api/v1/admin/ca-requests/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["count"], 1)
+
+        update_response = self.client.patch(
+            f"/api/v1/admin/ca-requests/{self.request_item.id}/",
+            {"status": "contacted", "priority": "high", "internal_notes": "Called customer"},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.request_item.refresh_from_db()
+        self.assertEqual(self.request_item.status, "contacted")
+        self.assertEqual(self.request_item.priority, "high")
+        self.assertEqual(self.request_item.internal_notes, "Called customer")
+        self.assertIsNotNone(self.request_item.contacted_at)

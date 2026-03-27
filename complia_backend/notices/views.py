@@ -1,9 +1,11 @@
+from django.utils import timezone
 from rest_framework import filters, mixins, permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle, UserRateThrottle
 
+from accounts.permissions import IsSuperAdmin
 from .models import NoticeFeedback, NoticeType, SavedNotice
-from .serializers import FeedbackSerializer, NoticeTypeSerializer, SavedNoticeSerializer
+from .serializers import AdminFeedbackSerializer, FeedbackSerializer, NoticeTypeSerializer, SavedNoticeSerializer
 
 
 class NoticeTypeViewSet(viewsets.ReadOnlyModelViewSet):
@@ -77,3 +79,30 @@ class SavedNoticeViewSet(
         output_serializer = self.get_serializer(saved_notice)
         response_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return Response(output_serializer.data, status=response_status)
+
+
+class SuperAdminFeedbackViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = AdminFeedbackSerializer
+    permission_classes = [IsSuperAdmin]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "admin_ops"
+    queryset = NoticeFeedback.objects.select_related("notice").all()
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["notice__code", "notice__title", "comments", "internal_notes"]
+    ordering_fields = ["created_at", "status"]
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        return queryset
+
+    def perform_update(self, serializer):
+        serializer.save(reviewed_at=timezone.now())

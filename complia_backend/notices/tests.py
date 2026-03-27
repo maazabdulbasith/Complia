@@ -187,3 +187,35 @@ class NoticeAPITests(APITestCase):
         payload = response.json()
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["checks"]["database"], "ok")
+
+    def test_superadmin_feedback_requires_admin(self):
+        response = self.client.get("/api/v1/admin/feedback/")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        self.client.force_authenticate(user=self.user)
+        denied = self.client.get("/api/v1/admin/feedback/")
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_superadmin_feedback_list_and_update(self):
+        admin = User.objects.create_user(email="admin@complia.in", password="pass123456", user_type="admin")
+        feedback = NoticeFeedback.objects.create(
+            notice=self.notice,
+            is_helpful=False,
+            comments="Need clearer explanation.",
+        )
+
+        self.client.force_authenticate(user=admin)
+        list_response = self.client.get("/api/v1/admin/feedback/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["count"], 1)
+
+        update_response = self.client.patch(
+            f"/api/v1/admin/feedback/{feedback.id}/",
+            {"status": "reviewed", "internal_notes": "Updated notice wording."},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        feedback.refresh_from_db()
+        self.assertEqual(feedback.status, "reviewed")
+        self.assertEqual(feedback.internal_notes, "Updated notice wording.")
+        self.assertIsNotNone(feedback.reviewed_at)

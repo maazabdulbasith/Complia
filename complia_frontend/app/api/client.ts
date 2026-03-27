@@ -42,12 +42,49 @@ export type AdminMetrics = {
     ca_help_submissions: number;
 };
 
+export type AdminCARequest = {
+    id: number;
+    notice_code: string;
+    name: string;
+    email: string;
+    phone_number: string;
+    message: string;
+    status: "new" | "triaged" | "contacted" | "resolved" | "closed";
+    priority: "low" | "medium" | "high";
+    assigned_to_email: string;
+    internal_notes: string;
+    contacted_at: string | null;
+    closed_at: string | null;
+    created_at: string;
+    updated_at: string;
+};
+
+export type AdminFeedbackItem = {
+    id: number;
+    notice: number;
+    notice_code: string;
+    notice_title: string;
+    is_helpful: boolean;
+    comments: string | null;
+    status: "new" | "reviewed" | "resolved";
+    internal_notes: string;
+    reviewed_at: string | null;
+    created_at: string;
+};
+
 type ApiErrorEnvelope = {
     status?: string;
     message?: string;
     code?: string;
     errors?: Record<string, unknown>;
     details?: unknown;
+};
+
+type PaginatedResponse<T> = {
+    count: number;
+    next: string | null;
+    previous: string | null;
+    results: T[];
 };
 
 function isPaginatedNoticeResponse(data: unknown): data is PaginatedNoticeResponse {
@@ -201,6 +238,10 @@ export async function submitCAHelpRequest(payload: CAHelpRequestPayload): Promis
     }
 }
 
+function isPaginatedResponse<T>(data: unknown): data is PaginatedResponse<T> {
+    return Boolean(data && typeof data === "object" && "results" in data && Array.isArray((data as PaginatedResponse<T>).results));
+}
+
 export async function sendAnalyticsEvent(payload: {
     event_name: string;
     path?: string;
@@ -229,6 +270,82 @@ export async function getSuperAdminMetrics(): Promise<AdminMetrics> {
     });
     if (!response.ok) {
         throw new Error(await getApiErrorMessage(response, "Failed to fetch admin metrics"));
+    }
+    return response.json();
+}
+
+export async function getAdminCARequests(status?: string): Promise<AdminCARequest[]> {
+    const query = status ? `?status=${encodeURIComponent(status)}` : "";
+    const response = await fetch(`${API_BASE}/admin/ca-requests/${query}`, {
+        headers: {
+            ...getAuthHeaders(),
+        },
+    });
+    if (!response.ok) {
+        throw new Error(await getApiErrorMessage(response, "Failed to fetch CA requests"));
+    }
+    const data = await response.json();
+    if (isPaginatedResponse<AdminCARequest>(data)) {
+        return data.results;
+    }
+    if (Array.isArray(data)) {
+        return data;
+    }
+    throw new Error("Unexpected admin CA requests response format");
+}
+
+export async function updateAdminCARequest(
+    requestId: number,
+    payload: Partial<Pick<AdminCARequest, "status" | "priority" | "assigned_to_email" | "internal_notes">>
+): Promise<AdminCARequest> {
+    const response = await fetch(`${API_BASE}/admin/ca-requests/${requestId}/`, {
+        method: "PATCH",
+        headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+        },
+        body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+        throw new Error(await getApiErrorMessage(response, "Failed to update CA request"));
+    }
+    return response.json();
+}
+
+export async function getAdminFeedbackItems(status?: string): Promise<AdminFeedbackItem[]> {
+    const query = status ? `?status=${encodeURIComponent(status)}` : "";
+    const response = await fetch(`${API_BASE}/admin/feedback/${query}`, {
+        headers: {
+            ...getAuthHeaders(),
+        },
+    });
+    if (!response.ok) {
+        throw new Error(await getApiErrorMessage(response, "Failed to fetch feedback"));
+    }
+    const data = await response.json();
+    if (isPaginatedResponse<AdminFeedbackItem>(data)) {
+        return data.results;
+    }
+    if (Array.isArray(data)) {
+        return data;
+    }
+    throw new Error("Unexpected admin feedback response format");
+}
+
+export async function updateAdminFeedbackItem(
+    feedbackId: number,
+    payload: Partial<Pick<AdminFeedbackItem, "status" | "internal_notes">>
+): Promise<AdminFeedbackItem> {
+    const response = await fetch(`${API_BASE}/admin/feedback/${feedbackId}/`, {
+        method: "PATCH",
+        headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+        },
+        body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+        throw new Error(await getApiErrorMessage(response, "Failed to update feedback item"));
     }
     return response.json();
 }

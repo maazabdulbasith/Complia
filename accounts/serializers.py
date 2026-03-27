@@ -32,9 +32,15 @@ class CAHelpRequestSerializer(serializers.ModelSerializer):
             "phone_number",
             "message",
             "status",
+            "priority",
+            "assigned_to_email",
+            "internal_notes",
+            "contacted_at",
+            "closed_at",
             "created_at",
+            "updated_at",
         ]
-        read_only_fields = ["id", "status", "created_at"]
+        read_only_fields = ["id", "status", "priority", "assigned_to_email", "internal_notes", "contacted_at", "closed_at", "created_at", "updated_at"]
 
     def validate_name(self, value):
         cleaned = value.strip()
@@ -71,3 +77,25 @@ class AnalyticsEventSerializer(serializers.ModelSerializer):
         if len(cleaned) < 8:
             raise serializers.ValidationError("Invalid session id.")
         return cleaned
+
+
+class AdminCAHelpRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CAHelpRequest
+        fields = [
+            "id",
+            "notice_code",
+            "name",
+            "email",
+            "phone_number",
+            "message",
+            "status",
+            "priority",
+            "assigned_to_email",
+            "internal_notes",
+            "contacted_at",
+            "closed_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]

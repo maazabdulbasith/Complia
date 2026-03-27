@@ -1,13 +1,23 @@
-from django.contrib import admin
 from django.urls import path, include
 from rest_framework import routers
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from complia_backend.notices.views import FeedbackViewSet, NoticeTypeViewSet, SavedNoticeViewSet
+from complia_backend.notices.views import (
+    FeedbackViewSet,
+    NoticeTypeViewSet,
+    SavedNoticeViewSet,
+    SuperAdminFeedbackViewSet,
+)
 from complia_backend.health import health_check, readiness_check
-from accounts.views import AnalyticsEventCreateView, CAHelpRequestCreateView, GoogleLogin, SuperAdminMetricsView
+from accounts.views import (
+    AnalyticsEventCreateView,
+    CAHelpRequestCreateView,
+    GoogleLogin,
+    SuperAdminCAHelpRequestViewSet,
+    SuperAdminMetricsView,
+)
 
 # API v1 Router
 router_v1 = routers.DefaultRouter()
@@ -15,8 +25,11 @@ router_v1.register(r'notices', NoticeTypeViewSet)
 router_v1.register(r'feedback', FeedbackViewSet, basename='feedback')
 router_v1.register(r'saved-notices', SavedNoticeViewSet, basename='saved-notice')
 
+admin_router_v1 = routers.DefaultRouter()
+admin_router_v1.register(r'ca-requests', SuperAdminCAHelpRequestViewSet, basename='admin-ca-request')
+admin_router_v1.register(r'feedback', SuperAdminFeedbackViewSet, basename='admin-feedback')
+
 urlpatterns = [
-    path('admin/', admin.site.urls),
     path('api/v1/health/', health_check, name='health-check'),
     path('api/v1/ready/', readiness_check, name='readiness-check'),
     
@@ -26,6 +39,7 @@ urlpatterns = [
         path('ca-help/', CAHelpRequestCreateView.as_view(), name='ca-help-create'),
         path('analytics/events/', AnalyticsEventCreateView.as_view(), name='analytics-event-create'),
         path('admin/metrics/', SuperAdminMetricsView.as_view(), name='superadmin-metrics'),
+        path('admin/', include(admin_router_v1.urls)),
         
         # Authentication & Accounts
         path('auth/', include([

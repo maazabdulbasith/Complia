@@ -42,7 +42,6 @@ SUPERADMIN_EMAILS = {email.lower() for email in _env_list("SUPERADMIN_EMAILS")}
 # APPLICATION DEFINITION
 # ==============================
 INSTALLED_APPS = [
-    "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -163,6 +162,7 @@ REST_FRAMEWORK = {
         "ca_help": "20/hour",
         "analytics_event": "300/hour",
         "admin_metrics": "600/hour",
+        "admin_ops": "600/hour",
     },
     "EXCEPTION_HANDLER": "complia_backend.exceptions.custom_exception_handler",
 }

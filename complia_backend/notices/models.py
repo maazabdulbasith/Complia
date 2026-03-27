@@ -41,9 +41,25 @@ class TriggerKeyword(models.Model):
         return f"'{self.keyword}' -> {self.notice_type.code}"
 
 class NoticeFeedback(models.Model):
+    STATUS_CHOICES = [
+        ("new", "New"),
+        ("reviewed", "Reviewed"),
+        ("resolved", "Resolved"),
+    ]
+
     notice = models.ForeignKey(NoticeType, on_delete=models.CASCADE, related_name='feedback')
     is_helpful = models.BooleanField(help_text="Did this help? (Yes/No)")
     comments = models.TextField(blank=True, null=True, help_text="Optional comments (only if No)")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="new", db_index=True)
+    internal_notes = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_feedback",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
