@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Form, Link, useNavigation } from "react-router";
+import { Form, Link, useNavigation, useNavigate } from "react-router";
 import { searchNotices } from "../api/client";
+import { trackEvent } from "../lib/analytics";
 import type { Route } from "./+types/home";
 
 export function meta({ }: Route.MetaArgs) {
@@ -40,15 +41,38 @@ function NoticeSkeleton() {
 export default function Home({ loaderData }: Route.ComponentProps) {
   const { results, query } = loaderData;
   const navigation = useNavigation();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState(query || "");
   const [user, setUser] = useState<{ email: string } | null>(null);
+  const isLoading = navigation.state === "loading";
 
   useEffect(() => {
     const savedUser = localStorage.getItem("user");
-    if (savedUser) setUser(JSON.parse(savedUser));
+    if (savedUser) {
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch {
+        localStorage.removeItem("user");
+      }
+    }
   }, []);
 
-  const isLoading = navigation.state === "loading";
+  useEffect(() => {
+    if (!query || isLoading) {
+      return;
+    }
+    trackEvent("notice_search", {
+      query,
+      result_count: results.length,
+    });
+  }, [query, results.length, isLoading]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("complia_token");
+    localStorage.removeItem("user");
+    setUser(null);
+    navigate("/");
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 relative overflow-hidden flex flex-col">
@@ -62,7 +86,19 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <div className="flex items-center gap-4">
           {user ? (
             <div className="flex items-center gap-3">
+               <Link
+                 to="/saved"
+                 className="hidden sm:inline-flex px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-all"
+               >
+                 Saved Notices
+               </Link>
                <span className="text-sm font-medium text-slate-600 hidden sm:block">{user.email}</span>
+               <button
+                 onClick={handleLogout}
+                 className="hidden sm:inline-flex px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-500 hover:text-rose-600 hover:border-rose-200 transition-all"
+               >
+                 Logout
+               </button>
                <div className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white shadow-sm flex items-center justify-center text-xs font-bold text-slate-500">
                   {user.email[0].toUpperCase()}
                </div>
@@ -150,6 +186,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               <Link
                 key={notice.code}
                 to={`/notice/${notice.code}`}
+                onClick={() => {
+                  trackEvent("search_result_clicked", {
+                    query,
+                    notice_code: notice.code,
+                  });
+                }}
                 className="group relative block bg-white rounded-2xl p-8 shadow-sm border border-slate-100 hover:shadow-xl hover:shadow-indigo-500/5 hover:border-indigo-100 transition-all duration-300"
               >
                 <div className="absolute top-6 right-6">
@@ -193,10 +235,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <div className="mt-20 text-center">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-8">Frequent Searches</h3>
             <div className="flex flex-wrap justify-center gap-3">
-              {["ASMT-10", "DRC-01", "Scrutiny", "Section 143", "GST Return"].map((item) => (
+              {["ASMT-10", "DRC-01", "Scrutiny", "Trademark Objection", "PF Hearing"].map((item) => (
                 <Link
                   key={item}
                   to={`/?q=${encodeURIComponent(item)}`}
+                  onClick={() => {
+                    trackEvent("frequent_search_clicked", { term: item });
+                  }}
                   className="px-5 py-2.5 bg-white rounded-full border border-slate-200 text-slate-600 text-sm font-medium hover:border-indigo-300 hover:text-indigo-600 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300"
                 >
                   {item}

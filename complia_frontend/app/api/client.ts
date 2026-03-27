@@ -10,6 +10,35 @@ type PaginatedNoticeResponse = {
     results: NoticeType[];
 };
 
+export type SavedNotice = {
+    id: number;
+    notice: NoticeType;
+    created_at: string;
+};
+
+type PaginatedSavedNoticeResponse = {
+    count: number;
+    next: string | null;
+    previous: string | null;
+    results: SavedNotice[];
+};
+
+export type CAHelpRequestPayload = {
+    notice_code?: string;
+    name: string;
+    email: string;
+    phone_number?: string;
+    message?: string;
+};
+
+type ApiErrorEnvelope = {
+    status?: string;
+    message?: string;
+    code?: string;
+    errors?: Record<string, unknown>;
+    details?: unknown;
+};
+
 function isPaginatedNoticeResponse(data: unknown): data is PaginatedNoticeResponse {
     return Boolean(
         data &&
@@ -17,6 +46,44 @@ function isPaginatedNoticeResponse(data: unknown): data is PaginatedNoticeRespon
         "results" in data &&
         Array.isArray((data as PaginatedNoticeResponse).results)
     );
+}
+
+function isPaginatedSavedNoticeResponse(data: unknown): data is PaginatedSavedNoticeResponse {
+    return Boolean(
+        data &&
+        typeof data === "object" &&
+        "results" in data &&
+        Array.isArray((data as PaginatedSavedNoticeResponse).results)
+    );
+}
+
+function getAuthHeaders(): Record<string, string> {
+    const token = localStorage.getItem("complia_token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function getApiErrorMessage(response: Response, fallback: string): Promise<string> {
+    try {
+        const data = (await response.json()) as ApiErrorEnvelope;
+        if (data.message) {
+            return data.message;
+        }
+
+        if (data.errors && typeof data.errors === "object") {
+            const [firstKey] = Object.keys(data.errors);
+            const firstValue = firstKey ? data.errors[firstKey] : null;
+            if (Array.isArray(firstValue) && firstValue.length > 0) {
+                return String(firstValue[0]);
+            }
+            if (typeof firstValue === "string") {
+                return firstValue;
+            }
+        }
+    } catch {
+        // Fall back to generic message below.
+    }
+
+    return fallback;
 }
 
 export async function searchNotices(query: string): Promise<NoticeType[]> {
@@ -47,7 +114,7 @@ export async function searchNotices(query: string): Promise<NoticeType[]> {
 export async function getNotice(code: string): Promise<NoticeType> {
     const response = await fetch(`${API_BASE}/notices/${code}/`);
     if (!response.ok) {
-        throw new Error("Notice not found");
+        throw new Error(await getApiErrorMessage(response, "Notice not found"));
     }
     return response.json();
 }
@@ -59,7 +126,66 @@ export async function submitFeedback(noticeId: number, isHelpful: boolean, comme
         body: JSON.stringify({ notice: noticeId, is_helpful: isHelpful, comments }),
     });
     if (!response.ok) {
-        throw new Error("Failed to submit feedback");
+        throw new Error(await getApiErrorMessage(response, "Failed to submit feedback"));
     }
     return response.json();
+}
+
+export async function getSavedNotices(): Promise<SavedNotice[]> {
+    const response = await fetch(`${API_BASE}/saved-notices/`, {
+        headers: {
+            ...getAuthHeaders(),
+        },
+    });
+    if (!response.ok) {
+        throw new Error(await getApiErrorMessage(response, "Failed to fetch saved notices"));
+    }
+    const data = await response.json();
+    if (isPaginatedSavedNoticeResponse(data)) {
+        return data.results;
+    }
+    if (Array.isArray(data)) {
+        return data;
+    }
+    throw new Error("Unexpected saved notice response format");
+}
+
+export async function saveNotice(noticeId: number): Promise<void> {
+    const response = await fetch(`${API_BASE}/saved-notices/`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ notice_id: noticeId }),
+    });
+    if (!response.ok) {
+        throw new Error(await getApiErrorMessage(response, "Failed to save notice"));
+    }
+}
+
+export async function removeSavedNotice(savedNoticeId: number): Promise<void> {
+    const response = await fetch(`${API_BASE}/saved-notices/${savedNoticeId}/`, {
+        method: "DELETE",
+        headers: {
+            ...getAuthHeaders(),
+        },
+    });
+    if (!response.ok) {
+        throw new Error(await getApiErrorMessage(response, "Failed to remove saved notice"));
+    }
+}
+
+export async function submitCAHelpRequest(payload: CAHelpRequestPayload): Promise<void> {
+    const response = await fetch(`${API_BASE}/ca-help/`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+        },
+        body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+        throw new Error(await getApiErrorMessage(response, "Failed to submit CA help request"));
+    }
 }

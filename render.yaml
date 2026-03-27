@@ -3,6 +3,7 @@ services:
   - type: web
     name: complia-backend
     runtime: python
+    healthCheckPath: /api/v1/health/
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate
     startCommand: gunicorn complia_backend.wsgi:application
     envVars:
@@ -22,10 +23,23 @@ services:
           type: static
           name: complia-frontend
           property: url
+      - key: CSRF_TRUSTED_ORIGINS
+        fromService:
+          type: static
+          name: complia-frontend
+          property: url
       - key: DATABASE_URL
         fromDatabase:
           name: complia-postgres
           property: connectionString
+      - key: DB_SSL_REQUIRE
+        value: true
+      - key: SITE_ID
+        value: 1
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
       - key: SENTRY_DSN
         sync: false
       - key: SECURE_SSL_REDIRECT
@@ -45,6 +59,10 @@ services:
           type: web
           name: complia-backend
           property: url
+      - key: VITE_GOOGLE_CLIENT_ID
+        sync: false
+      - key: VITE_ENABLE_ANALYTICS
+        value: true
     routes:
       - type: rewrite
         source: /*

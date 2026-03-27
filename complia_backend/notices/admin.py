@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import NoticeType, TriggerKeyword
+from .models import NoticeType, SavedNotice, TriggerKeyword
 
 class TriggerKeywordInline(admin.TabularInline):
     model = TriggerKeyword
@@ -30,3 +30,10 @@ class NoticeTypeAdmin(admin.ModelAdmin):
             'fields': ('created_at', 'updated_at')
         }),
     )
+
+
+@admin.register(SavedNotice)
+class SavedNoticeAdmin(admin.ModelAdmin):
+    list_display = ("user", "notice", "created_at")
+    search_fields = ("user__email", "notice__code", "notice__title")
+    readonly_fields = ("created_at",)

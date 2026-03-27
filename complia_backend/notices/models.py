@@ -1,5 +1,5 @@
 from django.db import models
-from django.utils import timezone
+from django.conf import settings
 
 class NoticeType(models.Model):
     SEVERITY_CHOICES = [
@@ -48,3 +48,24 @@ class NoticeFeedback(models.Model):
 
     def __str__(self):
         return f"{self.notice.code} - {'Helpful' if self.is_helpful else 'Not Helpful'}"
+
+
+class SavedNotice(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="saved_notices",
+    )
+    notice = models.ForeignKey(
+        NoticeType,
+        on_delete=models.CASCADE,
+        related_name="saved_by_users",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "notice")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.email} saved {self.notice.code}"

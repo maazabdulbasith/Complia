@@ -5,20 +5,25 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from complia_backend.notices.views import NoticeTypeViewSet, FeedbackViewSet
-from accounts.views import GoogleLogin
+from complia_backend.notices.views import FeedbackViewSet, NoticeTypeViewSet, SavedNoticeViewSet
+from complia_backend.health import health_check, readiness_check
+from accounts.views import CAHelpRequestCreateView, GoogleLogin
 
 # API v1 Router
 router_v1 = routers.DefaultRouter()
 router_v1.register(r'notices', NoticeTypeViewSet)
 router_v1.register(r'feedback', FeedbackViewSet, basename='feedback')
+router_v1.register(r'saved-notices', SavedNoticeViewSet, basename='saved-notice')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/v1/health/', health_check, name='health-check'),
+    path('api/v1/ready/', readiness_check, name='readiness-check'),
     
     # API v1 Namespace
     path('api/v1/', include([
         path('', include(router_v1.urls)),
+        path('ca-help/', CAHelpRequestCreateView.as_view(), name='ca-help-create'),
         
         # Authentication & Accounts
         path('auth/', include([

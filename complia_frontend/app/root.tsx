@@ -44,7 +44,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 import { GoogleOAuthProvider } from "@react-oauth/google";
 
 export default function App() {
-  const GOOGLE_CLIENT_ID = "331676867197-l9nlom3tj076pgi6fan2di26bnv6cb8b.apps.googleusercontent.com"; // Your dev client ID
+  const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "";
 
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>

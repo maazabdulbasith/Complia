@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User
+from .models import CAHelpRequest, User
 
 class CustomUserAdmin(UserAdmin):
     """
@@ -19,3 +19,11 @@ class CustomUserAdmin(UserAdmin):
     ordering = ['email']
 
 admin.site.register(User, CustomUserAdmin)
+
+
+@admin.register(CAHelpRequest)
+class CAHelpRequestAdmin(admin.ModelAdmin):
+    list_display = ("email", "notice_code", "status", "created_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("email", "name", "notice_code", "phone_number")
+    readonly_fields = ("created_at",)
