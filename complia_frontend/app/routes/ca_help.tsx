@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 
@@ -37,24 +37,34 @@ export default function CAHelpPage() {
     } catch {
       localStorage.removeItem("user");
     }
+  }, []);
+
+  useEffect(() => {
     trackEvent("ca_help_started", {
       notice_code: prefillNoticeCode || "general",
     });
   }, [prefillNoticeCode]);
 
+  const isFormValid = name.trim().length > 1 && email.trim().length > 3;
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!isFormValid) {
+      setError("Please enter your name and email to continue.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setSuccess(null);
 
     try {
       await submitCAHelpRequest({
-        notice_code: noticeCode,
-        name,
-        email,
-        phone_number: phoneNumber,
-        message,
+        notice_code: noticeCode.trim(),
+        name: name.trim(),
+        email: email.trim(),
+        phone_number: phoneNumber.trim(),
+        message: message.trim(),
       });
       trackEvent("ca_help_submitted", { notice_code: noticeCode || "general" });
       setSuccess("Request submitted. A CA expert will contact you shortly.");
@@ -83,6 +93,18 @@ export default function CAHelpPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="rounded-[24px] border border-slate-200/80 bg-white p-5 shadow-[0_16px_50px_rgba(15,23,42,0.08)] sm:rounded-[28px] sm:p-6 md:p-8">
+          <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-semibold text-slate-900">What happens next?</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Submit this form and a CA specialist reviews your notice context, then contacts you to plan response steps.
+            </p>
+            {prefillNoticeCode && (
+              <p className="mt-2 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                Prefilled notice: {prefillNoticeCode}
+              </p>
+            )}
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-semibold text-slate-700">Name</label>
@@ -92,6 +114,7 @@ export default function CAHelpPage() {
                 onChange={(e) => setName(e.target.value)}
                 className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
                 placeholder="Your full name"
+                autoComplete="name"
               />
             </div>
             <div>
@@ -103,6 +126,7 @@ export default function CAHelpPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
                 placeholder="you@example.com"
+                autoComplete="email"
               />
             </div>
             <div>
@@ -112,6 +136,7 @@ export default function CAHelpPage() {
                 onChange={(e) => setPhoneNumber(e.target.value)}
                 className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
                 placeholder="9876543210"
+                autoComplete="tel"
               />
             </div>
             <div>
@@ -134,14 +159,20 @@ export default function CAHelpPage() {
               className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
               placeholder="Mention notice deadline, demand amount, and urgency."
             />
+            <p className="mt-1 text-xs text-slate-500">Tip: include deadline date and claimed amount for faster triage.</p>
           </div>
 
-          {error && <p className="mt-3 text-sm text-rose-700">{error}</p>}
-          {success && <p className="mt-3 text-sm text-emerald-700">{success}</p>}
+          {error && <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
+          {success && (
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              <p className="font-semibold">{success}</p>
+              <p className="mt-1">Keep this tab open or check your email/phone for follow-up.</p>
+            </div>
+          )}
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !isFormValid}
             className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:brightness-110 disabled:opacity-60"
           >
             {loading ? "Submitting..." : "Submit request"}

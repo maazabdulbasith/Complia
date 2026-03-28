@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import type { Route } from "./+types/notice_details";
@@ -71,9 +71,18 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [assistedIntentLoading, setAssistedIntentLoading] = useState(false);
+  const [showAssistedModal, setShowAssistedModal] = useState(false);
+  const [assistedIntentSuccess, setAssistedIntentSuccess] = useState<string | null>(null);
+  const [assistedIntentError, setAssistedIntentError] = useState<string | null>(null);
+  const [assistedName, setAssistedName] = useState("");
+  const [assistedEmail, setAssistedEmail] = useState("");
+  const [assistedPhone, setAssistedPhone] = useState("");
+  const [assistedMessage, setAssistedMessage] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [offerVariant, setOfferVariant] = useState<"control" | "variant_a">("control");
   const [assistedOfferConfig, setAssistedOfferConfig] = useState<AssistedOfferConfig | null>(null);
+  const assistedNameInputRef = useRef<HTMLInputElement | null>(null);
+
   const offerKey = assistedOfferConfig?.offer?.key || "assisted_response_pack_v1";
   const offerTargetSeverity = assistedOfferConfig?.offer?.target_severity || "high";
   const offerAllowedForSeverity = offerTargetSeverity === "all" || offerTargetSeverity === notice.severity;
@@ -94,6 +103,22 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
 
   useEffect(() => {
     setIsLoggedIn(Boolean(localStorage.getItem("complia_token")));
+    const rawUser = localStorage.getItem("user");
+    if (rawUser) {
+      try {
+        const user = JSON.parse(rawUser) as { email?: string; first_name?: string; last_name?: string };
+        const fullName = `${user.first_name || ""} ${user.last_name || ""}`.trim();
+        if (fullName) {
+          setAssistedName(fullName);
+        }
+        if (user.email) {
+          setAssistedEmail(user.email);
+        }
+      } catch {
+        localStorage.removeItem("user");
+      }
+    }
+
     const sessionId = getAnalyticsSessionId();
     const variant = sessionId.slice(-1).charCodeAt(0) % 2 === 0 ? "control" : "variant_a";
     setOfferVariant(variant);
@@ -151,6 +176,43 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
     void loadSavedState();
   }, [isLoggedIn, notice.id]);
 
+  useEffect(() => {
+    if (!showAssistedModal) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusTimer = window.setTimeout(() => {
+      assistedNameInputRef.current?.focus();
+    }, 0);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !assistedIntentLoading) {
+        setShowAssistedModal(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [showAssistedModal, assistedIntentLoading]);
+
+  const openAssistedModal = () => {
+    setAssistedIntentError(null);
+    setAssistedIntentSuccess(null);
+    setShowAssistedModal(true);
+  };
+
+  const closeAssistedModal = () => {
+    if (assistedIntentLoading) {
+      return;
+    }
+    setShowAssistedModal(false);
+  };
+
   const handleFeedback = async (isHelpful: boolean, text?: string) => {
     if (!isHelpful && !(text || "").trim()) {
       setFeedbackError("Please tell us what was unclear before submitting.");
@@ -198,23 +260,43 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
   };
 
   const handleAssistedIntent = async () => {
+    if (!isLoggedIn) {
+      setAssistedIntentError("Please sign in before starting assisted response.");
+      return;
+    }
+
+    if (!assistedEmail.trim() && !assistedPhone.trim()) {
+      setAssistedIntentError("Please provide at least email or phone so we can contact you.");
+      return;
+    }
+
     setAssistedIntentLoading(true);
+    setAssistedIntentError(null);
     try {
       await submitAssistedIntent({
         notice_id: notice.id,
         offer_key: offerKey,
+        name: assistedName.trim(),
+        email: assistedEmail.trim(),
+        phone_number: assistedPhone.trim(),
         notice_code_snapshot: notice.code,
         severity_snapshot: notice.severity,
         source_path: `/notice/${notice.code}`,
         experiment_key: offerKey,
         experiment_variant: offerVariant,
-        metadata: { cta: "assisted_pack" },
+        metadata: { cta: "assisted_pack", notes: assistedMessage.trim() },
       });
       trackEvent("assisted_offer_clicked", {
         notice_code: notice.code,
         offer_key: offerKey,
         variant: offerVariant,
       });
+      setAssistedIntentSuccess("Request submitted. Our team will contact you shortly.");
+      setTimeout(() => {
+        setShowAssistedModal(false);
+      }, 1200);
+    } catch {
+      setAssistedIntentError("Could not submit request right now. Please try again.");
     } finally {
       setAssistedIntentLoading(false);
     }
@@ -318,7 +400,7 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
                     {assistedOfferConfig?.offer?.description || "Need done-for-you drafting support? Start with a guided assisted response flow."}
                   </p>
                   <button
-                    onClick={() => void handleAssistedIntent()}
+                    onClick={openAssistedModal}
                     disabled={assistedIntentLoading}
                     className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:opacity-60"
                   >
@@ -379,6 +461,98 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
           )}
         </section>
       </div>
+
+      {showAssistedModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-3 sm:items-center sm:p-6"
+          onClick={closeAssistedModal}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="assisted-response-title"
+            className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h3 id="assisted-response-title" className="font-display text-xl font-bold tracking-tight text-slate-900">
+                Start Assisted Response
+              </h3>
+              <button
+                type="button"
+                onClick={closeAssistedModal}
+                className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-600 hover:border-slate-400"
+              >
+                Close
+              </button>
+            </div>
+
+            <p className="mb-4 text-sm text-slate-600">
+              Share contact details so our team can help you respond to <span className="font-semibold">{notice.code}</span>.
+            </p>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <input
+                ref={assistedNameInputRef}
+                value={assistedName}
+                onChange={(event) => setAssistedName(event.target.value)}
+                placeholder="Your name"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:col-span-2"
+              />
+              <input
+                value={assistedEmail}
+                onChange={(event) => setAssistedEmail(event.target.value)}
+                placeholder="Email"
+                type="email"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+              />
+              <input
+                value={assistedPhone}
+                onChange={(event) => setAssistedPhone(event.target.value)}
+                placeholder="Phone"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+              />
+              <textarea
+                value={assistedMessage}
+                onChange={(event) => setAssistedMessage(event.target.value)}
+                rows={3}
+                placeholder="Optional context (deadline, amount, urgency)"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:col-span-2"
+              />
+            </div>
+
+            {assistedIntentError && <p className="mt-3 text-sm text-rose-600">{assistedIntentError}</p>}
+            {assistedIntentSuccess && <p className="mt-3 text-sm font-semibold text-emerald-700">{assistedIntentSuccess}</p>}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeAssistedModal}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-400"
+              >
+                Cancel
+              </button>
+              {isLoggedIn ? (
+                <button
+                  type="button"
+                  onClick={() => void handleAssistedIntent()}
+                  disabled={assistedIntentLoading}
+                  className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:opacity-60"
+                >
+                  {assistedIntentLoading ? "Submitting..." : "Submit Request"}
+                </button>
+              ) : (
+                <Link
+                  to={`/login?next=${encodeURIComponent(`/notice/${notice.code}`)}`}
+                  className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-500"
+                >
+                  Sign in to continue
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -52,6 +52,7 @@ export default function SuperAdminDashboard() {
   const [parserJobs, setParserJobs] = useState<ParserJob[]>([]);
   const [parserBenchmarkRuns, setParserBenchmarkRuns] = useState<ParserBenchmarkRun[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -76,6 +77,7 @@ export default function SuperAdminDashboard() {
     if (!silent) setLoading(true);
     if (silent) setRefreshing(true);
     setError(null);
+    setAccessDenied(false);
     try {
       const [
         metricData,
@@ -107,8 +109,15 @@ export default function SuperAdminDashboard() {
       setNoticeQaItems(noticeQaData);
       setParserJobs(parserData);
       setParserBenchmarkRuns(parserBenchmarkData);
-    } catch {
-      setError("Access denied or admin data unavailable. Ensure this account is admin.");
+    } catch (apiError) {
+      const message = apiError instanceof Error ? apiError.message : "";
+      const isAccessError = /access denied|admin|permission|forbidden|401|403|sign in|login|unauthorized/i.test(message);
+      setAccessDenied(isAccessError);
+      setError(
+        isAccessError
+          ? "This account cannot access SuperAdmin. Sign in with an admin account."
+          : "Admin data is unavailable right now. Please refresh and retry."
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -273,7 +282,33 @@ export default function SuperAdminDashboard() {
         {loading ? (
           <div className="rounded-2xl border border-white/60 bg-white/70 p-8 text-slate-600">Loading live business metrics...</div>
         ) : error ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-8 text-rose-700">{error}</div>
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-8 text-rose-700">
+            <p className="font-semibold">{error}</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {accessDenied ? (
+                <Link
+                  to="/login?next=/superadmin"
+                  className="rounded-xl bg-rose-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-600"
+                >
+                  Sign in as admin
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void fetchAll(true)}
+                  className="rounded-xl bg-rose-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-600"
+                >
+                  Retry
+                </button>
+              )}
+              <Link
+                to="/"
+                className="rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-300"
+              >
+                Back to product
+              </Link>
+            </div>
+          </div>
         ) : metrics ? (
           <>
             <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
@@ -341,7 +376,12 @@ export default function SuperAdminDashboard() {
 
             <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm mb-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-                <h2 className="text-xl font-bold text-slate-900">Assisted Intent Inbox</h2>
+                <h2 className="text-xl font-bold text-slate-900">
+                  Assisted Intent Inbox
+                  <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                    {assistedIntents.length}
+                  </span>
+                </h2>
                 <select
                   value={assistedStatusFilter}
                   onChange={(e) => setAssistedStatusFilter(e.target.value)}
@@ -397,13 +437,22 @@ export default function SuperAdminDashboard() {
                     {savingKey === `intent-${item.id}` && <p className="text-xs text-slate-500 mt-2">Saving...</p>}
                   </div>
                 ))}
-                {assistedIntents.length === 0 && <p className="text-sm text-slate-500">No assisted intents match this filter.</p>}
+                {assistedIntents.length === 0 && (
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                    No assisted intents match this filter yet.
+                  </p>
+                )}
               </div>
             </section>
 
             <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm mb-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-                <h2 className="text-xl font-bold text-slate-900">Notice Editorial QA</h2>
+                <h2 className="text-xl font-bold text-slate-900">
+                  Notice Editorial QA
+                  <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                    {noticeQaItems.length}
+                  </span>
+                </h2>
                 <select
                   value={noticeQaFilter}
                   onChange={(e) => setNoticeQaFilter(e.target.value as "" | "stale" | "unverified")}
@@ -473,13 +522,22 @@ export default function SuperAdminDashboard() {
                     {savingKey === `notice-${item.id}` && <p className="text-xs text-slate-500 mt-2">Saving...</p>}
                   </div>
                 ))}
-                {noticeQaItems.length === 0 && <p className="text-sm text-slate-500">No notices match this filter.</p>}
+                {noticeQaItems.length === 0 && (
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                    No notice records match this QA filter.
+                  </p>
+                )}
               </div>
             </section>
 
             <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm mb-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-                <h2 className="text-xl font-bold text-slate-900">Parser Review Queue</h2>
+                <h2 className="text-xl font-bold text-slate-900">
+                  Parser Review Queue
+                  <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                    {parserJobs.length}
+                  </span>
+                </h2>
                 <select
                   value={parserStatusFilter}
                   onChange={(e) => setParserStatusFilter(e.target.value)}
@@ -575,13 +633,22 @@ export default function SuperAdminDashboard() {
                     {savingKey === `parser-${item.id}` && <p className="text-xs text-slate-500 mt-2">Saving...</p>}
                   </div>
                 ))}
-                {parserJobs.length === 0 && <p className="text-sm text-slate-500">No parser jobs match this filter.</p>}
+                {parserJobs.length === 0 && (
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                    No parser jobs match this filter.
+                  </p>
+                )}
               </div>
             </section>
 
             <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm mb-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-                <h2 className="text-xl font-bold text-slate-900">CA Requests Inbox</h2>
+                <h2 className="text-xl font-bold text-slate-900">
+                  CA Requests Inbox
+                  <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                    {caRequests.length}
+                  </span>
+                </h2>
                 <select
                   value={caStatusFilter}
                   onChange={(e) => {
@@ -653,13 +720,22 @@ export default function SuperAdminDashboard() {
                     {savingKey === `ca-${item.id}` && <p className="text-xs text-slate-500 mt-2">Saving...</p>}
                   </div>
                 ))}
-                {caRequests.length === 0 && <p className="text-sm text-slate-500">No CA requests match this filter.</p>}
+                {caRequests.length === 0 && (
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                    No CA requests match this filter.
+                  </p>
+                )}
               </div>
             </section>
 
             <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-                <h2 className="text-xl font-bold text-slate-900">Feedback Inbox</h2>
+                <h2 className="text-xl font-bold text-slate-900">
+                  Feedback Inbox
+                  <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                    {feedbackItems.length}
+                  </span>
+                </h2>
                 <select
                   value={feedbackStatusFilter}
                   onChange={(e) => {
@@ -708,7 +784,11 @@ export default function SuperAdminDashboard() {
                     {savingKey === `fb-${item.id}` && <p className="text-xs text-slate-500 mt-2">Saving...</p>}
                   </div>
                 ))}
-                {feedbackItems.length === 0 && <p className="text-sm text-slate-500">No feedback items match this filter.</p>}
+                {feedbackItems.length === 0 && (
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                    No feedback items match this filter.
+                  </p>
+                )}
               </div>
             </section>
           </>
