@@ -3,17 +3,39 @@ import { Link } from "react-router";
 
 import type { Route } from "./+types/notice_details";
 import {
+  getAssistedOfferConfig,
   getNotice,
   getSavedNotices,
+  recordExperimentExposure,
   removeSavedNotice,
   saveNotice,
+  submitAssistedIntent,
   submitFeedback,
+  type AssistedOfferConfig,
 } from "../api/client";
-import { trackEvent } from "../lib/analytics";
+import { getAnalyticsSessionId, trackEvent } from "../lib/analytics";
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const notice = await getNotice(params.id);
   return { notice };
+}
+
+export function meta({ data }: Route.MetaArgs) {
+  const notice = data?.notice;
+  if (!notice) {
+    return [
+      { title: "Complia | Notice Details" },
+      { name: "description", content: "Detailed tax notice explanation and next steps." },
+    ];
+  }
+
+  return [
+    { title: notice.meta_title || `Complia | ${notice.code} - ${notice.title}` },
+    { name: "description", content: notice.meta_description || notice.summary },
+    { property: "og:title", content: notice.meta_title || `${notice.code} - ${notice.title}` },
+    { property: "og:description", content: notice.meta_description || notice.summary },
+    { property: "og:type", content: "article" },
+  ];
 }
 
 function severityMeta(severity: "low" | "medium" | "high") {
@@ -48,20 +70,70 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
   const [savedNoticeId, setSavedNoticeId] = useState<number | null>(null);
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [assistedIntentLoading, setAssistedIntentLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [offerVariant, setOfferVariant] = useState<"control" | "variant_a">("control");
+  const [assistedOfferConfig, setAssistedOfferConfig] = useState<AssistedOfferConfig | null>(null);
+  const offerKey = assistedOfferConfig?.offer?.key || "assisted_response_pack_v1";
+  const offerTargetSeverity = assistedOfferConfig?.offer?.target_severity || "high";
+  const offerAllowedForSeverity = offerTargetSeverity === "all" || offerTargetSeverity === notice.severity;
+  const showAssistedOffer = Boolean(assistedOfferConfig?.enabled && assistedOfferConfig.offer && offerAllowedForSeverity);
 
   const tone = severityMeta(notice.severity);
+  const noticeSchema = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: notice.title,
+    description: notice.summary,
+    dateModified: notice.updated_at,
+    author: {
+      "@type": "Organization",
+      name: "Complia",
+    },
+  };
 
   useEffect(() => {
     setIsLoggedIn(Boolean(localStorage.getItem("complia_token")));
+    const sessionId = getAnalyticsSessionId();
+    const variant = sessionId.slice(-1).charCodeAt(0) % 2 === 0 ? "control" : "variant_a";
+    setOfferVariant(variant);
+
+    const loadOfferConfig = async () => {
+      try {
+        const config = await getAssistedOfferConfig();
+        setAssistedOfferConfig(config);
+      } catch {
+        setAssistedOfferConfig({ enabled: false, offer: null });
+      }
+    };
+
+    void loadOfferConfig();
   }, []);
 
   useEffect(() => {
-    trackEvent("notice_detail_viewed", {
+    trackEvent("notice_opened", {
       notice_code: notice.code,
       severity: notice.severity,
     });
   }, [notice.code, notice.severity]);
+
+  useEffect(() => {
+    if (!showAssistedOffer) {
+      return;
+    }
+    trackEvent("assisted_offer_seen", {
+      notice_code: notice.code,
+      offer_key: offerKey,
+      variant: offerVariant,
+    });
+    void recordExperimentExposure({
+      session_id: getAnalyticsSessionId(),
+      experiment_key: offerKey,
+      variant: offerVariant,
+      path: `/notice/${notice.code}`,
+      metadata: { severity: notice.severity },
+    });
+  }, [notice.code, notice.severity, offerKey, offerVariant, showAssistedOffer]);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -125,8 +197,35 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
     }
   };
 
+  const handleAssistedIntent = async () => {
+    setAssistedIntentLoading(true);
+    try {
+      await submitAssistedIntent({
+        notice_id: notice.id,
+        offer_key: offerKey,
+        notice_code_snapshot: notice.code,
+        severity_snapshot: notice.severity,
+        source_path: `/notice/${notice.code}`,
+        experiment_key: offerKey,
+        experiment_variant: offerVariant,
+        metadata: { cta: "assisted_pack" },
+      });
+      trackEvent("assisted_offer_clicked", {
+        notice_code: notice.code,
+        offer_key: offerKey,
+        variant: offerVariant,
+      });
+    } finally {
+      setAssistedIntentLoading(false);
+    }
+  };
+
   return (
     <div className="grid-aurora min-h-screen overflow-x-hidden text-slate-900">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(noticeSchema) }}
+      />
       <div className="mx-auto w-full max-w-6xl px-4 pb-16 pt-6 sm:px-5 sm:pt-8 md:pt-10">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <Link
@@ -209,6 +308,24 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
                   {saveError && <p className="text-xs text-rose-600">{saveError}</p>}
                 </div>
               </section>
+
+              {showAssistedOffer && (
+                <section className="rounded-2xl border border-violet-200 bg-violet-50 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.13em] text-violet-700">
+                    {assistedOfferConfig?.offer?.name || "Assisted Response Pack"}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-violet-900">
+                    {assistedOfferConfig?.offer?.description || "Need done-for-you drafting support? Start with a guided assisted response flow."}
+                  </p>
+                  <button
+                    onClick={() => void handleAssistedIntent()}
+                    disabled={assistedIntentLoading}
+                    className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:opacity-60"
+                  >
+                    {assistedIntentLoading ? "Starting..." : "Start Assisted Response"}
+                  </button>
+                </section>
+              )}
             </aside>
           </div>
         </article>

@@ -1,0 +1,44 @@
+[
+  {
+    "filename": "drc01-sample.txt",
+    "text": "Show cause under Section 73. INR 125000 is payable against GST-DRC-01.",
+    "expected_notice_code": "GST-DRC-01",
+    "expected_legal_section": "Section 73",
+    "expected_amount": "125000"
+  },
+  {
+    "filename": "asmt10-sample.txt",
+    "text": "Scrutiny notice GST-ASMT-10 for mismatch in returns under Section 61.",
+    "expected_notice_code": "GST-ASMT-10",
+    "expected_legal_section": "Section 61",
+    "expected_amount": null
+  },
+  {
+    "filename": "it1432.txt",
+    "text": "You are selected for scrutiny under Section 143(2).",
+    "expected_notice_code": "IT-143(2)",
+    "expected_legal_section": "Section 143(2)",
+    "expected_amount": null
+  },
+  {
+    "filename": "it156-demand.txt",
+    "text": "Demand notice under Section 156 for INR 82000.",
+    "expected_notice_code": "IT-156",
+    "expected_legal_section": "Section 156",
+    "expected_amount": "82000"
+  },
+  {
+    "filename": "reg17-cancel.txt",
+    "text": "Show cause for cancellation GST-REG-17 under Section 29.",
+    "expected_notice_code": "GST-REG-17",
+    "expected_legal_section": "Section 29",
+    "expected_amount": null
+  },
+  {
+    "filename": "unknown.txt",
+    "text": "General communication from department.",
+    "expected_notice_code": "",
+    "expected_legal_section": "",
+    "expected_amount": null
+  }
+]

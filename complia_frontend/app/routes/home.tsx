@@ -70,7 +70,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     if (!query || isSearchNavigation) {
       return;
     }
-    trackEvent("notice_search", {
+    trackEvent("search_performed", {
       query,
       result_count: results.length,
     });

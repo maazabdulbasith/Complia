@@ -48,6 +48,7 @@ import { useLocation } from "react-router";
 
 export default function App() {
   const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "";
+  const SITE_URL = (import.meta.env.VITE_SITE_URL as string | undefined)?.replace(/\/$/, "");
   const location = useLocation();
 
   useEffect(() => {
@@ -59,6 +60,20 @@ export default function App() {
 
     return () => window.clearInterval(intervalId);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    const canonicalHref = `${SITE_URL || window.location.origin}${location.pathname}`;
+    let linkEl = document.querySelector("link[rel='canonical']") as HTMLLinkElement | null;
+    if (!linkEl) {
+      linkEl = document.createElement("link");
+      linkEl.setAttribute("rel", "canonical");
+      document.head.appendChild(linkEl);
+    }
+    linkEl.setAttribute("href", canonicalHref);
+  }, [SITE_URL, location.pathname]);
 
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>

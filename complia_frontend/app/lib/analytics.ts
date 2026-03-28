@@ -26,7 +26,7 @@ function analyticsEnabled(): boolean {
   return import.meta.env.PROD;
 }
 
-function getSessionId(): string {
+export function getAnalyticsSessionId(): string {
   const key = "complia_session_id";
   const existing = localStorage.getItem(key);
   if (existing) {
@@ -57,7 +57,7 @@ export function trackEvent(eventName: string, properties: AnalyticsProperties = 
       event_name: eventName,
       path: window.location.pathname,
       metadata: properties,
-      session_id: getSessionId(),
+      session_id: getAnalyticsSessionId(),
     });
   } catch {
     // Analytics must never block product interactions.

@@ -3,7 +3,15 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from unittest.mock import Mock, patch
 
-from .models import AnalyticsEvent, CAHelpRequest, User
+from .models import (
+    AnalyticsEvent,
+    AssistedOffer,
+    AssistedIntent,
+    CAHelpRequest,
+    ExperimentExposure,
+    User,
+    WeeklyKpiSnapshot,
+)
 
 
 class UserModelTests(TestCase):
@@ -67,6 +75,17 @@ class AnalyticsTests(APITestCase):
         response = self.client.post("/api/v1/analytics/events/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(AnalyticsEvent.objects.count(), 1)
+
+    def test_create_analytics_event_requires_schema_for_search(self):
+        payload = {
+            "event_name": "search_performed",
+            "path": "/",
+            "session_id": "sess-12345678",
+            "metadata": {"query": "DRC-01"},
+        }
+        response = self.client.post("/api/v1/analytics/events/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("metadata", response.data["errors"])
 
     def test_superadmin_metrics_requires_admin(self):
         user = User.objects.create_user(email="user@complia.in", password="pass123456", user_type="taxpayer")
@@ -177,3 +196,133 @@ class SuperAdminCARequestOpsTests(APITestCase):
         self.assertEqual(self.request_item.priority, "high")
         self.assertEqual(self.request_item.internal_notes, "Called customer")
         self.assertIsNotNone(self.request_item.contacted_at)
+
+
+class SuperAdminFunnelAndKpiTests(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(email="admin@complia.in", password="pass123456", user_type="admin")
+        AnalyticsEvent.objects.create(
+            user=self.admin,
+            event_name="search_performed",
+            session_id="sess-phase2a",
+            path="/",
+            metadata={"query": "DRC-01", "result_count": 4},
+        )
+        AnalyticsEvent.objects.create(
+            user=self.admin,
+            event_name="notice_opened",
+            session_id="sess-phase2a",
+            path="/notice/GST-DRC-01",
+            metadata={"notice_code": "GST-DRC-01", "severity": "high"},
+        )
+        AnalyticsEvent.objects.create(
+            user=self.admin,
+            event_name="ca_help_submitted",
+            session_id="sess-phase2a",
+            path="/ca-help",
+            metadata={"notice_code": "GST-DRC-01"},
+        )
+
+    def test_funnel_endpoint_admin_access(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get("/api/v1/admin/funnel/?window=7d")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("steps", response.data)
+        self.assertGreaterEqual(response.data["steps"]["search_performed"], 1)
+
+    def test_funnel_endpoint_30d_window(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get("/api/v1/admin/funnel/?window=30d")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["window"], "30d")
+
+    def test_kpis_endpoint_generates_snapshot(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get("/api/v1/admin/kpis/?window=7d")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("current", response.data)
+        self.assertIn("weekly_snapshots", response.data)
+        self.assertGreaterEqual(WeeklyKpiSnapshot.objects.count(), 1)
+
+
+class AssistedIntentAndExperimentTests(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(email="admin@complia.in", password="pass123456", user_type="admin")
+        self.user = User.objects.create_user(email="user@complia.in", password="pass123456", user_type="taxpayer")
+
+    def test_create_assisted_intent(self):
+        offer = AssistedOffer.objects.create(
+            key="assisted_offer_v1",
+            name="Assisted Response Pack",
+            target_severity="high",
+            is_active=True,
+        )
+        payload = {
+            "offer_key": "assisted_offer_v1",
+            "name": "Ravi",
+            "email": "ravi@example.com",
+            "notice_code_snapshot": "GST-DRC-01",
+            "severity_snapshot": "high",
+            "source_path": "/notice/GST-DRC-01",
+            "experiment_key": "assisted_offer_v1",
+            "experiment_variant": "control",
+            "metadata": {"source": "notice_detail"},
+        }
+        response = self.client.post("/api/v1/assisted-intent/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(AssistedIntent.objects.count(), 1)
+        self.assertEqual(AssistedIntent.objects.first().offer_id, offer.id)
+
+    def test_experiment_exposure_upsert(self):
+        payload = {
+            "session_id": "sess-phase2-exp",
+            "experiment_key": "assisted_offer_v1",
+            "variant": "control",
+            "path": "/notice/GST-DRC-01",
+            "metadata": {"severity": "high"},
+        }
+        first = self.client.post("/api/v1/experiments/exposure/", payload, format="json")
+        second = self.client.post("/api/v1/experiments/exposure/", payload, format="json")
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(ExperimentExposure.objects.count(), 1)
+
+    def test_superadmin_assisted_intent_update(self):
+        intent = AssistedIntent.objects.create(
+            name="Ravi",
+            email="ravi@example.com",
+            notice_code_snapshot="GST-DRC-01",
+            severity_snapshot="high",
+        )
+        self.client.force_authenticate(user=self.admin)
+        list_response = self.client.get("/api/v1/admin/assisted-intents/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["count"], 1)
+
+        patch_response = self.client.patch(
+            f"/api/v1/admin/assisted-intents/{intent.id}/",
+            {"status": "contacted", "operator_notes": "Called and shared package details."},
+            format="json",
+        )
+        self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
+        intent.refresh_from_db()
+        self.assertEqual(intent.status, "contacted")
+        self.assertIsNotNone(intent.contacted_at)
+
+    @override_settings(ASSISTED_OFFER_ENABLED=False)
+    def test_assisted_offer_config_disabled(self):
+        response = self.client.get("/api/v1/assisted-offer/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["enabled"])
+        self.assertIsNone(response.data["offer"])
+
+    @override_settings(
+        ASSISTED_OFFER_ENABLED=True,
+        ASSISTED_OFFER_DEFAULT_KEY="assisted_response_pack_v1",
+        ASSISTED_OFFER_TARGET_SEVERITY="high",
+    )
+    def test_assisted_offer_config_fallback_enabled(self):
+        response = self.client.get("/api/v1/assisted-offer/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["enabled"])
+        self.assertEqual(response.data["offer"]["key"], "assisted_response_pack_v1")

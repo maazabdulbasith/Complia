@@ -7,15 +7,27 @@ from rest_framework_simplejwt.views import (
 from complia_backend.notices.views import (
     FeedbackViewSet,
     NoticeTypeViewSet,
+    ParserResultDetailView,
+    ParserUploadView,
     SavedNoticeViewSet,
+    SuperAdminNoticeTypeViewSet,
+    SuperAdminParserBenchmarkRunViewSet,
+    SuperAdminParserJobViewSet,
     SuperAdminFeedbackViewSet,
 )
 from complia_backend.health import health_check, readiness_check
+from complia_backend.seo import robots_txt, sitemap_xml
 from accounts.views import (
+    AssistedOfferConfigView,
+    AssistedIntentCreateView,
     AnalyticsEventCreateView,
     CAHelpRequestCreateView,
+    ExperimentExposureCreateView,
     GoogleLogin,
+    SuperAdminAssistedIntentViewSet,
     SuperAdminCAHelpRequestViewSet,
+    SuperAdminFunnelView,
+    SuperAdminKpiView,
     SuperAdminMetricsView,
 )
 
@@ -28,8 +40,14 @@ router_v1.register(r'saved-notices', SavedNoticeViewSet, basename='saved-notice'
 admin_router_v1 = routers.DefaultRouter()
 admin_router_v1.register(r'ca-requests', SuperAdminCAHelpRequestViewSet, basename='admin-ca-request')
 admin_router_v1.register(r'feedback', SuperAdminFeedbackViewSet, basename='admin-feedback')
+admin_router_v1.register(r'assisted-intents', SuperAdminAssistedIntentViewSet, basename='admin-assisted-intent')
+admin_router_v1.register(r'notices', SuperAdminNoticeTypeViewSet, basename='admin-notice')
+admin_router_v1.register(r'parser-jobs', SuperAdminParserJobViewSet, basename='admin-parser-job')
+admin_router_v1.register(r'parser-benchmarks', SuperAdminParserBenchmarkRunViewSet, basename='admin-parser-benchmark')
 
 urlpatterns = [
+    path('robots.txt', robots_txt, name='robots-txt'),
+    path('sitemap.xml', sitemap_xml, name='sitemap-xml'),
     path('api/v1/health/', health_check, name='health-check'),
     path('api/v1/ready/', readiness_check, name='readiness-check'),
     
@@ -37,8 +55,15 @@ urlpatterns = [
     path('api/v1/', include([
         path('', include(router_v1.urls)),
         path('ca-help/', CAHelpRequestCreateView.as_view(), name='ca-help-create'),
+        path('assisted-offer/', AssistedOfferConfigView.as_view(), name='assisted-offer-config'),
+        path('assisted-intent/', AssistedIntentCreateView.as_view(), name='assisted-intent-create'),
+        path('experiments/exposure/', ExperimentExposureCreateView.as_view(), name='experiment-exposure-create'),
+        path('parser/upload/', ParserUploadView.as_view(), name='parser-upload'),
+        path('parser/results/<int:pk>/', ParserResultDetailView.as_view(), name='parser-result-detail'),
         path('analytics/events/', AnalyticsEventCreateView.as_view(), name='analytics-event-create'),
         path('admin/metrics/', SuperAdminMetricsView.as_view(), name='superadmin-metrics'),
+        path('admin/funnel/', SuperAdminFunnelView.as_view(), name='superadmin-funnel'),
+        path('admin/kpis/', SuperAdminKpiView.as_view(), name='superadmin-kpis'),
         path('admin/', include(admin_router_v1.urls)),
         
         # Authentication & Accounts

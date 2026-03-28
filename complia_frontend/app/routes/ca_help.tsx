@@ -4,6 +4,14 @@ import { Link, useSearchParams } from "react-router";
 
 import { submitCAHelpRequest } from "../api/client";
 import { trackEvent } from "../lib/analytics";
+import type { Route } from "./+types/ca_help";
+
+export function meta({}: Route.MetaArgs) {
+  return [
+    { title: "Complia | Request CA Help" },
+    { name: "description", content: "Get expert CA help for your tax notice response." },
+  ];
+}
 
 export default function CAHelpPage() {
   const [searchParams] = useSearchParams();
@@ -29,7 +37,10 @@ export default function CAHelpPage() {
     } catch {
       localStorage.removeItem("user");
     }
-  }, []);
+    trackEvent("ca_help_started", {
+      notice_code: prefillNoticeCode || "general",
+    });
+  }, [prefillNoticeCode]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

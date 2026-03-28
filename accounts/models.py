@@ -111,12 +111,15 @@ class CAHelpRequest(models.Model):
 class AnalyticsEvent(models.Model):
     EVENT_CHOICES = (
         ("page_view", "Page View"),
-        ("notice_search", "Notice Search"),
+        ("search_performed", "Search Performed"),
+        ("notice_opened", "Notice Opened"),
+        ("ca_help_started", "CA Help Started"),
         ("search_result_clicked", "Search Result Clicked"),
-        ("notice_detail_viewed", "Notice Detail Viewed"),
         ("notice_saved", "Notice Saved"),
         ("notice_unsaved", "Notice Unsaved"),
         ("ca_help_submitted", "CA Help Submitted"),
+        ("assisted_offer_seen", "Assisted Offer Seen"),
+        ("assisted_offer_clicked", "Assisted Offer Clicked"),
         ("admin_dashboard_viewed", "Admin Dashboard Viewed"),
         ("admin_dashboard_heartbeat", "Admin Dashboard Heartbeat"),
         ("admin_ca_request_updated", "Admin CA Request Updated"),
@@ -141,3 +144,117 @@ class AnalyticsEvent(models.Model):
 
     def __str__(self):
         return f"{self.event_name} ({self.session_id})"
+
+
+class AssistedOffer(models.Model):
+    TARGET_SEVERITY_CHOICES = (
+        ("all", "All"),
+        ("low", "Low"),
+        ("medium", "Medium"),
+        ("high", "High"),
+    )
+
+    key = models.CharField(max_length=60, unique=True)
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    target_severity = models.CharField(max_length=20, choices=TARGET_SEVERITY_CHOICES, default="high")
+    is_active = models.BooleanField(default=True)
+    config = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["key"]
+
+    def __str__(self):
+        return self.key
+
+
+class AssistedIntent(models.Model):
+    STATUS_CHOICES = (
+        ("new", "New"),
+        ("triaged", "Triaged"),
+        ("contacted", "Contacted"),
+        ("won", "Won"),
+        ("lost", "Lost"),
+        ("closed", "Closed"),
+    )
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assisted_intents",
+    )
+    notice = models.ForeignKey(
+        "notices.NoticeType",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assisted_intents",
+    )
+    offer = models.ForeignKey(
+        AssistedOffer,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="intents",
+    )
+    name = models.CharField(max_length=120, blank=True)
+    email = models.EmailField(blank=True)
+    phone_number = models.CharField(max_length=20, blank=True)
+    notice_code_snapshot = models.CharField(max_length=80, blank=True)
+    severity_snapshot = models.CharField(max_length=20, blank=True)
+    source_path = models.CharField(max_length=255, blank=True)
+    experiment_key = models.CharField(max_length=80, blank=True)
+    experiment_variant = models.CharField(max_length=40, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="new", db_index=True)
+    operator_notes = models.TextField(blank=True)
+    contacted_at = models.DateTimeField(null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.notice_code_snapshot or 'unknown'} - {self.status}"
+
+
+class ExperimentExposure(models.Model):
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="experiment_exposures",
+    )
+    session_id = models.CharField(max_length=64, db_index=True)
+    experiment_key = models.CharField(max_length=80, db_index=True)
+    variant = models.CharField(max_length=40)
+    path = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        unique_together = ("session_id", "experiment_key")
+
+    def __str__(self):
+        return f"{self.experiment_key}:{self.variant}"
+
+
+class WeeklyKpiSnapshot(models.Model):
+    week_start = models.DateField(unique=True)
+    week_end = models.DateField()
+    metrics = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-week_start"]
+
+    def __str__(self):
+        return f"Week of {self.week_start}"
