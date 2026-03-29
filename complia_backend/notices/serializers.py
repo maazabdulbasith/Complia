@@ -89,7 +89,7 @@ class FeedbackSerializer(serializers.ModelSerializer):
 
         if is_helpful is False and not comments:
             raise serializers.ValidationError(
-                {"comments": ["Please tell us what was unclear."]}
+                {"comments": ["Please tell us what was unclear!"]}
             )
 
         return attrs
