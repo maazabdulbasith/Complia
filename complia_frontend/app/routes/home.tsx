@@ -171,7 +171,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">At a glance</p>
             <div className="mt-4 grid grid-cols-3 gap-2 text-center sm:gap-3">
               <div className="rounded-2xl bg-slate-50 px-2 py-4">
-                <p className="font-display text-xl font-bold text-slate-900 sm:text-2xl">20+</p>
+                <p className="font-display text-xl font-bold text-slate-900 sm:text-2xl">170+</p>
                 <p className="text-[11px] text-slate-500">notices</p>
               </div>
               <div className="rounded-2xl bg-slate-50 px-2 py-4">
@@ -284,3 +284,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     </div>
   );
 }
+
+
+
+

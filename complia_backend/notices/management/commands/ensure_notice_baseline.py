@@ -89,7 +89,7 @@ CURATED_NOTICE_SEEDS: list[CuratedNoticeSeed] = [
     _seed("GST-EWB-03", "E-Way Bill Inspection Report", "medium", "Rule 138C (FORM GST EWB-03)", "gst"),
     _seed("GST-EWB-04", "E-Way Bill Final Report", "medium", "Rule 138C (FORM GST EWB-04)", "gst"),
 
-    # Income Tax (33)
+    # Income Tax (93)
     _seed("IT-139(9)", "Defective Return Notice", "medium", "Income-tax Act Section 139(9)", "income_tax"),
     _seed("IT-142(1)", "Inquiry Before Assessment", "medium", "Income-tax Act Section 142(1)", "income_tax"),
     _seed("IT-143(1)", "Intimation after Processing of Return", "low", "Income-tax Act Section 143(1)", "income_tax"),
@@ -123,6 +123,66 @@ CURATED_NOTICE_SEEDS: list[CuratedNoticeSeed] = [
     _seed("IT-206C-6A", "Assessee-in-default (TCS) Notice", "high", "Income-tax Act Section 206C(6A)", "income_tax"),
     _seed("IT-TDS-DEFAULT", "TRACES TDS Default Communication", "high", "TRACES / Income-tax compliance communication", "income_tax"),
     _seed("IT-AIS-MISMATCH", "AIS Mismatch Communication", "medium", "AIS compliance communication on e-Filing portal", "income_tax"),
+    _seed("IT-139-1-NONFILING", "Non-Filing Defect Communication", "medium", "Income-tax Act Section 139(1)", "income_tax"),
+    _seed("IT-139-4-BELATED", "Belated Return Compliance Communication", "low", "Income-tax Act Section 139(4)", "income_tax"),
+    _seed("IT-139-5-REVISED", "Revised Return Defect Communication", "medium", "Income-tax Act Section 139(5)", "income_tax"),
+    _seed("IT-139-8A-UPDATED", "Updated Return Compliance Communication", "medium", "Income-tax Act Section 139(8A)", "income_tax"),
+    _seed("IT-1431-80C-ADJUST", "Intimation Adjustment for Section 80C Claim", "medium", "Income-tax Act Section 143(1) read with Section 80C", "income_tax"),
+    _seed("IT-1431-80D-ADJUST", "Intimation Adjustment for Section 80D Claim", "medium", "Income-tax Act Section 143(1) read with Section 80D", "income_tax"),
+    _seed("IT-1431-87A-ADJUST", "Intimation Adjustment for Rebate u/s 87A", "medium", "Income-tax Act Section 143(1) read with Section 87A", "income_tax"),
+    _seed("IT-1431-HRA-ADJUST", "Intimation Adjustment for HRA Exemption", "medium", "Income-tax Act Section 10(13A) read with Rule 2A", "income_tax"),
+    _seed("IT-1431-24B-ADJUST", "Intimation Adjustment for Home Loan Interest", "medium", "Income-tax Act Section 24(b)", "income_tax"),
+    _seed("IT-1431-89-RELIEF-ADJUST", "Intimation Adjustment for Relief u/s 89", "medium", "Income-tax Act Section 89(1)", "income_tax"),
+    _seed("IT-1431-STD-DED-ADJUST", "Intimation Adjustment for Standard Deduction", "medium", "Income-tax Act Section 16(ia)", "income_tax"),
+    _seed("IT-1431-115BAC-MISMATCH", "Tax Regime Mismatch Intimation", "medium", "Income-tax Act Section 115BAC", "income_tax"),
+    _seed("IT-1431-FORM16-MISMATCH", "Form 16 and Return Mismatch Intimation", "medium", "Income-tax Act Section 143(1) processing", "income_tax"),
+    _seed("IT-1431-TDS-CREDIT-MISMATCH", "TDS Credit Mismatch Intimation", "high", "Income-tax Act Section 199 read with Rule 37BA", "income_tax"),
+    _seed("IT-1431-AIS-TIS-MISMATCH", "AIS/TIS Mismatch Intimation", "medium", "AIS/TIS compliance communication on e-Filing portal", "income_tax"),
+    _seed("IT-234A-B-C-INTEREST", "Interest Levy Intimation under Sections 234A/234B/234C", "medium", "Income-tax Act Sections 234A, 234B, 234C", "income_tax"),
+    _seed("IT-REFUND-FAILURE", "Refund Failure Communication", "low", "Income-tax refund processing workflow", "income_tax"),
+    _seed("IT-REFUND-REISSUE", "Refund Reissue Communication", "low", "Income-tax refund reissue workflow", "income_tax"),
+    _seed("IT-139AA-PAN-AADHAAR", "PAN-Aadhaar Linking Non-Compliance Communication", "medium", "Income-tax Act Section 139AA", "income_tax"),
+    _seed("IT-EVERIFY-PENDING", "Return E-Verification Pending Communication", "low", "Income-tax return verification workflow", "income_tax"),
+    _seed("IT-INTIMATION-DEMAND-OUTSTANDING", "Outstanding Demand Intimation", "high", "Income-tax demand and recovery workflow", "income_tax"),
+    _seed("IT-INTIMATION-REFUND-HELD", "Refund Held Intimation", "medium", "Income-tax refund processing workflow", "income_tax"),
+    _seed("IT-INTIMATION-BANK-VALIDATION", "Bank Account Validation Intimation", "low", "Income-tax refund processing workflow", "income_tax"),
+    _seed("IT-INTIMATION-PREVALIDATE-BANK", "Pre-validate Bank Account Communication", "low", "Income-tax e-Filing account compliance workflow", "income_tax"),
+    _seed("IT-INTIMATION-VERIFICATION-FAIL", "Return Verification Failure Intimation", "medium", "Income-tax return verification workflow", "income_tax"),
+    _seed("IT-INTIMATION-NOTICE-REISSUE", "Reissued Notice Communication", "medium", "Income-tax e-Proceedings communication workflow", "income_tax"),
+    _seed("IT-INTIMATION-HIGH-REFUND-SCRUTINY", "High Refund Risk Review Intimation", "medium", "Income-tax risk-based return processing workflow", "income_tax"),
+    _seed("IT-INTIMATION-SFT-MISMATCH", "SFT and Return Mismatch Intimation", "medium", "Income-tax Act Section 285BA (SFT reporting)", "income_tax"),
+    _seed("IT-INTIMATION-26AS-MISMATCH", "Form 26AS Mismatch Intimation", "medium", "Income-tax Act Section 203AA / Form 26AS workflow", "income_tax"),
+    _seed("IT-INTIMATION-FORM16A-MISMATCH", "Form 16A Mismatch Intimation", "medium", "Income-tax TDS credit workflow", "income_tax"),
+    _seed("IT-INTIMATION-ADVANCE-TAX-SHORT", "Advance Tax Shortfall Intimation", "medium", "Income-tax Act Sections 208/209", "income_tax"),
+    _seed("IT-INTIMATION-SAT-UNPAID", "Self Assessment Tax Unpaid Intimation", "high", "Income-tax Act Section 140A", "income_tax"),
+    _seed("IT-INTIMATION-80G-ADJUST", "Intimation Adjustment for Section 80G", "medium", "Income-tax Act Section 143(1) read with Section 80G", "income_tax"),
+    _seed("IT-INTIMATION-80TTA-ADJUST", "Intimation Adjustment for Section 80TTA", "medium", "Income-tax Act Section 143(1) read with Section 80TTA", "income_tax"),
+    _seed("IT-INTIMATION-80TTB-ADJUST", "Intimation Adjustment for Section 80TTB", "medium", "Income-tax Act Section 143(1) read with Section 80TTB", "income_tax"),
+    _seed("IT-INTIMATION-80CCD1B-ADJUST", "Intimation Adjustment for Section 80CCD(1B)", "medium", "Income-tax Act Section 143(1) read with Section 80CCD(1B)", "income_tax"),
+    _seed("IT-INTIMATION-SECTION24B-CAP", "Home Loan Interest Cap Adjustment", "medium", "Income-tax Act Section 24(b)", "income_tax"),
+    _seed("IT-INTIMATION-HPL-LOSS-CAP", "House Property Loss Set-off Cap Intimation", "medium", "Income-tax Act Section 71(3A)", "income_tax"),
+    _seed("IT-INTIMATION-CAPITAL-GAIN-MISMATCH", "Capital Gain Mismatch Intimation", "high", "Income-tax return processing and AIS/TIS comparison", "income_tax"),
+    _seed("IT-INTIMATION-SCHEDULE-FA", "Foreign Asset Disclosure Intimation", "high", "Schedule FA disclosure requirements under Income-tax return", "income_tax"),
+    _seed("IT-INTIMATION-SCHEDULE-AL", "Assets and Liabilities Schedule Intimation", "medium", "Schedule AL disclosure requirements under Income-tax return", "income_tax"),
+    _seed("IT-INTIMATION-HRA-CALC", "HRA Exemption Calculation Intimation", "medium", "Income-tax Act Section 10(13A) read with Rule 2A", "income_tax"),
+    _seed("IT-INTIMATION-LTA-EXEMPTION", "Leave Travel Allowance Exemption Intimation", "medium", "Income-tax Act Section 10(5)", "income_tax"),
+    _seed("IT-INTIMATION-GRATUITY-EXEMPTION", "Gratuity Exemption Intimation", "medium", "Income-tax Act Section 10(10)", "income_tax"),
+    _seed("IT-INTIMATION-LEAVE-ENCASHMENT", "Leave Encashment Exemption Intimation", "medium", "Income-tax Act Section 10(10AA)", "income_tax"),
+    _seed("IT-INTIMATION-NPS-EMPLOYER", "Employer NPS Contribution Intimation", "medium", "Income-tax Act Section 80CCD(2)", "income_tax"),
+    _seed("IT-INTIMATION-REBATE-87A-DENIAL", "Rebate u/s 87A Denial Intimation", "medium", "Income-tax Act Section 87A", "income_tax"),
+    _seed("IT-INTIMATION-CHAPTER-VIA", "Chapter VI-A Deduction Mismatch Intimation", "medium", "Income-tax Act Chapter VI-A", "income_tax"),
+    _seed("IT-INTIMATION-REVISED-VARIANCE", "Revised Return Variance Intimation", "medium", "Income-tax Act Section 139(5)", "income_tax"),
+    _seed("IT-INTIMATION-UPDATED-ADDL-TAX", "Updated Return Additional Tax Intimation", "medium", "Income-tax Act Section 140B read with Section 139(8A)", "income_tax"),
+    _seed("IT-INTIMATION-234A", "Interest Intimation under Section 234A", "medium", "Income-tax Act Section 234A", "income_tax"),
+    _seed("IT-INTIMATION-234B", "Interest Intimation under Section 234B", "medium", "Income-tax Act Section 234B", "income_tax"),
+    _seed("IT-INTIMATION-234C", "Interest Intimation under Section 234C", "medium", "Income-tax Act Section 234C", "income_tax"),
+    _seed("IT-INTIMATION-244A", "Refund Interest Computation Intimation", "low", "Income-tax Act Section 244A", "income_tax"),
+    _seed("IT-INTIMATION-PAN-INOP-TDS", "Higher TDS due to Inoperative PAN Intimation", "medium", "Income-tax Act Section 206AA / PAN inoperative rules", "income_tax"),
+    _seed("IT-INTIMATION-TCS-FOREX", "TCS on Foreign Remittance Intimation", "medium", "Income-tax Act Section 206C(1G)", "income_tax"),
+    _seed("IT-INTIMATION-TCS-TOUR", "TCS on Overseas Tour Payment Intimation", "medium", "Income-tax Act Section 206C(1G)", "income_tax"),
+    _seed("IT-INTIMATION-206C1G-MISMATCH", "TCS Credit Mismatch u/s 206C(1G)", "medium", "Income-tax Act Section 206C(1G)", "income_tax"),
+    _seed("IT-INTIMATION-PPF-80C-MISMATCH", "PPF Deduction Mismatch Intimation", "medium", "Income-tax Act Section 80C", "income_tax"),
+    _seed("IT-INTIMATION-ELSS-80C-MISMATCH", "ELSS Deduction Mismatch Intimation", "medium", "Income-tax Act Section 80C", "income_tax"),
 
     # MCA (8)
     _seed("MCA-STK-1", "ROC Strike-off Notice", "high", "Companies Act, 2013 Section 248 (Form STK-1)", "mca"),
@@ -219,7 +279,12 @@ class Command(BaseCommand):
     help = "Ensure a curated, verified baseline notice corpus (default: 110 curated active notices)."
 
     def add_arguments(self, parser):
-        parser.add_argument("--target", type=int, default=110, help="Target active curated notice count (max 110).")
+        parser.add_argument(
+            "--target",
+            type=int,
+            default=len(CURATED_NOTICE_SEEDS),
+            help=f"Target active curated notice count (max {len(CURATED_NOTICE_SEEDS)}).",
+        )
         parser.add_argument(
             "--verified-by",
             default="Complia Editorial",
@@ -232,12 +297,11 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        if len(CURATED_NOTICE_SEEDS) != 110:
-            raise CommandError(f"Curated catalog must contain exactly 110 entries. Found {len(CURATED_NOTICE_SEEDS)}")
+        catalog_size = len(CURATED_NOTICE_SEEDS)
 
         target = max(1, int(options["target"]))
-        if target > len(CURATED_NOTICE_SEEDS):
-            raise CommandError(f"Target {target} exceeds curated catalog size {len(CURATED_NOTICE_SEEDS)}")
+        if target > catalog_size:
+            raise CommandError(f"Target {target} exceeds curated catalog size {catalog_size}")
 
         verified_by = options["verified_by"].strip() or "Complia Editorial"
         strict_curated_only = bool(options["strict_curated_only"])
