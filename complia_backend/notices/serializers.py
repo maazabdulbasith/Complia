@@ -82,6 +82,7 @@ class FeedbackSerializer(serializers.ModelSerializer):
     class Meta:
         model = NoticeFeedback
         fields = ["notice", "is_helpful", "comments", "created_at"]
+#adding comment required if not helpful
     def validate(self, attrs):
         is_helpful = attrs.get("is_helpful")
         comments = (attrs.get("comments") or "").strip()
@@ -89,6 +90,11 @@ class FeedbackSerializer(serializers.ModelSerializer):
         if is_helpful is False and not comments:
             raise serializers.ValidationError(
                 {"comments": ["Please tell us what was unclear!"]}
+            )
+#max lenthg of the comment set to 1000
+        if len(comments) > 1000:
+            raise serializers.ValidationError(
+                {"comments": ["Comments cannot exceed 1000 characters."]}
             )
 
         return attrs
@@ -238,11 +244,3 @@ class AdminParserBenchmarkRunSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
-=======
-        fields = ['notice', 'is_helpful', 'comments', 'created_at']
-    def validate(self, data):
-        if data.get('is_helpful') == False and not data.get('comments', '').strip():
-            raise serializers.ValidationError({
-                'comments': 'Comments are required when feedback is not helpful.'
-            })
-        return data    

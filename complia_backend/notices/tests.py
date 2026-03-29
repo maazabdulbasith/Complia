@@ -32,7 +32,7 @@ class NoticeAPITests(APITestCase):
             notice_type=self.notice,
             keyword="scrutiny"
         )
-        
+
         # Create an inactive notice
         self.inactive_notice = NoticeType.objects.create(
             code="HIDDEN-001",
@@ -140,7 +140,7 @@ class NoticeAPITests(APITestCase):
                 next_steps="...",
                 is_active=True
             )
-        
+
         url = reverse('noticetype-list')
         response = self.client.get(url)
         # 27 active notices total (2 from setUp + 25)
@@ -361,3 +361,35 @@ class NoticeAPITests(APITestCase):
         call_command("ensure_notice_baseline", "--target", "30", "--verified-by", "QA Team")
         self.assertGreaterEqual(NoticeType.objects.filter(is_active=True).count(), 30)
         self.assertGreaterEqual(NoticeType.objects.filter(is_active=True, verified_at__isnull=False).count(), 30)
+
+    def test_feedback_unhelpful_without_comments_fails(self):
+        """is_helpful=False with empty comments should return 400."""
+        url = reverse('feedback-list')
+        data = {
+            "notice": self.notice.id,
+            "is_helpful": False,
+            "comments": ""
+            }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_feedback_helpful_without_comments_passes(self):
+        """is_helpful=True with no comments should return 201."""
+        url = reverse('feedback-list')
+        data = {
+            "notice": self.notice.id,
+            "is_helpful": True
+            }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_feedback_comments_max_length(self):
+        """Comments exceeding 1000 characters should return 400."""
+        url = reverse('feedback-list')
+        data = {
+            "notice": self.notice.id,
+            "is_helpful": False,
+            "comments": "a" * 1001
+         }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
