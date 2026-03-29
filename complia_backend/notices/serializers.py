@@ -81,7 +81,6 @@ class AdminNoticeTypeSerializer(serializers.ModelSerializer):
 class FeedbackSerializer(serializers.ModelSerializer):
     class Meta:
         model = NoticeFeedback
-#adding validate to fix comment problem
         fields = ["notice", "is_helpful", "comments", "created_at"]
     def validate(self, attrs):
         is_helpful = attrs.get("is_helpful")
@@ -239,3 +238,11 @@ class AdminParserBenchmarkRunSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+=======
+        fields = ['notice', 'is_helpful', 'comments', 'created_at']
+    def validate(self, data):
+        if data.get('is_helpful') == False and not data.get('comments', '').strip():
+            raise serializers.ValidationError({
+                'comments': 'Comments are required when feedback is not helpful.'
+            })
+        return data    
