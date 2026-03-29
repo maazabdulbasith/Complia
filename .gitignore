@@ -13,6 +13,7 @@ complia_backend/venv/
 venv/
 .venv/
 env/
+docs/
 
 # ==============================
 # Django
@@ -32,6 +33,7 @@ media/
 .env.production
 *.pem
 *.key
+*.docx
 
 # ==============================
 # Node / Frontend

@@ -2,57 +2,104 @@ name: Complia CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
-  test-backend:
+  secrets:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-        
-    - name: Install backend dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        
-    - name: Run Django Tests
-      env:
-        SECRET_KEY: 'ci-pipeline-insecure-key-do-not-use-in-prod'
-        DEBUG: 'True'
-        ALLOWED_HOSTS: 'localhost,127.0.0.1'
-        # No DATABASE_URL set, will fall back to SQLite for tests
-      run: |
-        cd complia_backend
-        # Note: In a real CI, we might run flake8 here first
-        python ../manage.py test complia_backend.notices.tests
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  test-frontend:
+      - name: Block committed .env files
+        run: |
+          if git ls-files | grep -E '(^|/)\.env($|\.(local|production|development|test))'; then
+            echo "Committed .env file detected. Move secrets to platform env vars."
+            exit 1
+          fi
+
+      - name: Secret pattern scan (tracked files only)
+        run: |
+          # We intentionally scan tracked files only to avoid failing on local ignored files.
+          if git grep -nE '(GOCSPX-|AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY-----|xox[baprs]-)' -- . ':!.env.example' ':!.github/workflows/*'; then
+            echo "Potential secret detected in tracked files."
+            exit 1
+          fi
+
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ci-insecure-key-change-me
+      DEBUG: "True"
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
+      CSRF_TRUSTED_ORIGINS: http://localhost:5173
+      GOOGLE_CLIENT_ID: dummy-client-id
+      GOOGLE_CLIENT_SECRET: dummy-client-secret
+      SITE_ID: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint
+        run: |
+          flake8 accounts complia_backend/notices complia_backend/settings.py complia_backend/urls.py \
+            --exclude=accounts/migrations,complia_backend/notices/migrations \
+            --max-line-length=160 \
+            --extend-ignore=E302,E305,W293
+
+      - name: Validate migrations
+        run: |
+          python manage.py makemigrations --check --dry-run
+
+      - name: Run Django deploy checks
+        env:
+          DEBUG: "False"
+          ALLOWED_HOSTS: example.com
+          CORS_ALLOWED_ORIGINS: https://example.com
+          CSRF_TRUSTED_ORIGINS: https://example.com
+          SECURE_HSTS_SECONDS: 31536000
+        run: |
+          python manage.py check --deploy
+
+      - name: Run backend tests
+        run: |
+          python manage.py test
+
+  frontend:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ./complia_frontend
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-        cache-dependency-path: './complia_frontend/package.json'
-        
-    - name: Install frontend dependencies
-      run: |
-        npm ci
-        
-    - name: Type check
-      run: |
-        npm run typecheck
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ./complia_frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build

@@ -1,10 +1,21 @@
+import json
+import os
+import tempfile
+from datetime import timedelta
+
+from django.core.management import call_command
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
-from .models import NoticeType, TriggerKeyword, NoticeFeedback
+from .models import NoticeFeedback, NoticeType, ParserBenchmarkRun, ParserJob, TriggerKeyword
+from accounts.models import User
 
 class NoticeAPITests(APITestCase):
     def setUp(self):
+        self.user = User.objects.create_user(email="tester@complia.in", password="testpass123")
         # Create a sample notice
         self.notice = NoticeType.objects.create(
             code="TEST-001",
@@ -32,14 +43,26 @@ class NoticeAPITests(APITestCase):
             is_active=False
         )
 
+        self.high_severity_notice = NoticeType.objects.create(
+            code="HIGH-001",
+            title="High Severity Notice",
+            detailed_explanation="Explanation",
+            consequences_of_ignoring="Bad things",
+            next_steps="Step 1",
+            severity="high",
+            is_active=True,
+        )
+
     def test_list_notices(self):
         """Verify only active notices are listed."""
         url = reverse('noticetype-list')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Test pagination (should be 1 because only one is active)
-        self.assertEqual(response.data['count'], 1)
-        self.assertEqual(response.data['results'][0]['code'], "TEST-001")
+        # Test pagination (two notices are active in setUp)
+        self.assertEqual(response.data['count'], 2)
+        result_codes = [row["code"] for row in response.data["results"]]
+        self.assertIn("TEST-001", result_codes)
+        self.assertIn("HIGH-001", result_codes)
 
     def test_search_notices_by_code(self):
         """Search by notice code."""
@@ -47,6 +70,13 @@ class NoticeAPITests(APITestCase):
         response = self.client.get(url, {'search': 'TEST-001'})
         self.assertEqual(len(response.data['results']), 1)
         self.assertEqual(response.data['results'][0]['code'], "TEST-001")
+
+    def test_filter_notices_by_severity(self):
+        url = reverse("noticetype-list")
+        response = self.client.get(url, {"severity": "high"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["code"], "HIGH-001")
 
     def test_search_notices_by_keyword(self):
         """Search by trigger keyword."""
@@ -64,7 +94,7 @@ class NoticeAPITests(APITestCase):
 
     def test_submit_valid_feedback(self):
         """Submit helpful feedback."""
-        url = reverse('noticefeedback-list')
+        url = reverse('feedback-list')
         data = {
             "notice": self.notice.id,
             "is_helpful": True
@@ -75,13 +105,28 @@ class NoticeAPITests(APITestCase):
 
     def test_submit_invalid_feedback(self):
         """Submit feedback without required fields."""
-        url = reverse('noticefeedback-list')
+        url = reverse('feedback-list')
         data = {
             "is_helpful": True
             # Missing notice ID (required foreign key)
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["status"], "error")
+        self.assertEqual(response.data["message"], "Validation failed.")
+        self.assertIn("notice", response.data["errors"])
+
+    def test_submit_negative_feedback_without_comments(self):
+        url = reverse("feedback-list")
+        data = {
+            "notice": self.notice.id,
+            "is_helpful": False,
+            "comments": "",
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["status"], "error")
+        self.assertIn("comments", response.data["errors"])
 
     def test_pagination(self):
         """Verify pagination works (set to 20 in settings)."""
@@ -98,8 +143,221 @@ class NoticeAPITests(APITestCase):
         
         url = reverse('noticetype-list')
         response = self.client.get(url)
-        # 26 active notices total (1 from setUp + 25)
-        self.assertEqual(response.data['count'], 26)
+        # 27 active notices total (2 from setUp + 25)
+        self.assertEqual(response.data['count'], 27)
         # Should only return 20 per page (limit set in settings.py)
         self.assertEqual(len(response.data['results']), 20)
         self.assertIsNotNone(response.data['next'])
+
+    def test_save_notice_requires_auth(self):
+        url = reverse("saved-notice-list")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_save_notice_create_and_list(self):
+        self.client.force_authenticate(user=self.user)
+
+        create_url = reverse("saved-notice-list")
+        create_response = self.client.post(create_url, {"notice_id": self.notice.id}, format="json")
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+
+        list_response = self.client.get(create_url)
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["count"], 1)
+        self.assertEqual(list_response.data["results"][0]["notice"]["code"], self.notice.code)
+
+    def test_save_notice_delete(self):
+        self.client.force_authenticate(user=self.user)
+        create_url = reverse("saved-notice-list")
+        create_response = self.client.post(create_url, {"notice_id": self.notice.id}, format="json")
+        saved_notice_id = create_response.data["id"]
+
+        delete_url = reverse("saved-notice-detail", kwargs={"pk": saved_notice_id})
+        delete_response = self.client.delete(delete_url)
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_save_notice_duplicate_rejected(self):
+        self.client.force_authenticate(user=self.user)
+        create_url = reverse("saved-notice-list")
+        first = self.client.post(create_url, {"notice_id": self.notice.id}, format="json")
+        second = self.client.post(create_url, {"notice_id": self.notice.id}, format="json")
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+
+    def test_health_check_endpoint(self):
+        response = self.client.get(reverse("health-check"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payload = response.json()
+        self.assertEqual(payload["status"], "ok")
+
+    def test_robots_and_sitemap_routes(self):
+        robots = self.client.get(reverse("robots-txt"))
+        sitemap = self.client.get(reverse("sitemap-xml"))
+        self.assertEqual(robots.status_code, status.HTTP_200_OK)
+        self.assertEqual(sitemap.status_code, status.HTTP_200_OK)
+        self.assertIn("Sitemap:", robots.content.decode())
+        self.assertIn("<urlset", sitemap.content.decode())
+
+    def test_readiness_check_endpoint(self):
+        response = self.client.get(reverse("readiness-check"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payload = response.json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["checks"]["database"], "ok")
+
+    def test_superadmin_feedback_requires_admin(self):
+        response = self.client.get("/api/v1/admin/feedback/")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        self.client.force_authenticate(user=self.user)
+        denied = self.client.get("/api/v1/admin/feedback/")
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_superadmin_feedback_list_and_update(self):
+        admin = User.objects.create_user(email="admin@complia.in", password="pass123456", user_type="admin")
+        feedback = NoticeFeedback.objects.create(
+            notice=self.notice,
+            is_helpful=False,
+            comments="Need clearer explanation.",
+        )
+
+        self.client.force_authenticate(user=admin)
+        list_response = self.client.get("/api/v1/admin/feedback/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["count"], 1)
+
+        update_response = self.client.patch(
+            f"/api/v1/admin/feedback/{feedback.id}/",
+            {"status": "reviewed", "internal_notes": "Updated notice wording."},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        feedback.refresh_from_db()
+        self.assertEqual(feedback.status, "reviewed")
+        self.assertEqual(feedback.internal_notes, "Updated notice wording.")
+        self.assertIsNotNone(feedback.reviewed_at)
+
+    def test_parser_upload_forbidden_when_private_beta_disabled(self):
+        beta_user = User.objects.create_user(email="beta@complia.in", password="pass123456", user_type="taxpayer")
+        self.client.force_authenticate(user=beta_user)
+        upload = SimpleUploadedFile("notice.txt", b"Section 73 INR 12345", content_type="text/plain")
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(PARSER_PRIVATE_BETA_ENABLED=True, PARSER_BETA_EMAILS={"beta@complia.in"})
+    def test_parser_upload_and_result_flow(self):
+        beta_user = User.objects.create_user(email="beta@complia.in", password="pass123456", user_type="taxpayer")
+        self.client.force_authenticate(user=beta_user)
+        upload = SimpleUploadedFile(
+            "GST-DRC-01-notice.txt",
+            b"This is a demand notice. Section 73. INR 125000 due.",
+            content_type="text/plain",
+        )
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("extraction", response.data)
+        parser_job_id = response.data["id"]
+
+        detail = self.client.get(f"/api/v1/parser/results/{parser_job_id}/")
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+        self.assertIn("confidence", detail.data)
+
+    @override_settings(PARSER_PRIVATE_BETA_ENABLED=True)
+    def test_superadmin_parser_review_update(self):
+        admin = User.objects.create_user(email="admin@complia.in", password="pass123456", user_type="admin")
+        parser_job = ParserJob.objects.create(
+            user=admin,
+            notice=self.notice,
+            original_filename="mock.txt",
+            status="review_required",
+            confidence=0.4,
+            is_private_beta=True,
+            delete_after=self.notice.updated_at,
+        )
+        self.client.force_authenticate(user=admin)
+        list_response = self.client.get("/api/v1/admin/parser-jobs/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["count"], 1)
+
+        patch_response = self.client.patch(
+            f"/api/v1/admin/parser-jobs/{parser_job.id}/",
+            {"status": "completed", "review_notes": "Approved by reviewer."},
+            format="json",
+        )
+        self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
+        parser_job.refresh_from_db()
+        self.assertEqual(parser_job.status, "completed")
+
+    def test_superadmin_parser_benchmark_list(self):
+        admin = User.objects.create_user(email="admin2@complia.in", password="pass123456", user_type="admin")
+        ParserBenchmarkRun.objects.create(
+            sample_count=10,
+            notice_precision=0.7,
+            notice_recall=0.8,
+            section_precision=0.6,
+            section_recall=0.7,
+            amount_precision=0.5,
+            amount_recall=0.6,
+            overall_f1=0.66,
+            metrics={"note": "test"},
+            generated_by=admin,
+        )
+
+        self.client.force_authenticate(user=admin)
+        response = self.client.get("/api/v1/admin/parser-benchmarks/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+
+    def test_cleanup_expired_parser_jobs_command(self):
+        admin = User.objects.create_user(email="cleanup@complia.in", password="pass123456", user_type="admin")
+        ParserJob.objects.create(
+            user=admin,
+            notice=self.notice,
+            original_filename="expired.txt",
+            status="completed",
+            confidence=0.8,
+            is_private_beta=True,
+            delete_after=timezone.now() - timedelta(hours=2),
+            processed_at=timezone.now(),
+        )
+        ParserJob.objects.create(
+            user=admin,
+            notice=self.notice,
+            original_filename="active.txt",
+            status="completed",
+            confidence=0.8,
+            is_private_beta=True,
+            delete_after=timezone.now() + timedelta(hours=2),
+            processed_at=timezone.now(),
+        )
+
+        call_command("cleanup_expired_parser_jobs")
+        self.assertEqual(ParserJob.objects.count(), 1)
+        self.assertEqual(ParserJob.objects.first().original_filename, "active.txt")
+
+    def test_run_parser_benchmark_command_stores_run(self):
+        sample_payload = [
+            {
+                "filename": "GST-DRC-01-test.txt",
+                "text": "GST-DRC-01 under Section 73 for INR 1000.",
+                "expected_notice_code": "GST-DRC-01",
+                "expected_legal_section": "Section 73",
+                "expected_amount": "1000",
+            }
+        ]
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as tmp:
+            json.dump(sample_payload, tmp)
+            tmp_path = tmp.name
+
+        try:
+            call_command("run_parser_benchmark", "--dataset", tmp_path)
+            self.assertEqual(ParserBenchmarkRun.objects.count(), 1)
+            self.assertEqual(ParserBenchmarkRun.objects.first().sample_count, 1)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+    def test_ensure_notice_baseline_command(self):
+        call_command("ensure_notice_baseline", "--target", "30", "--verified-by", "QA Team")
+        self.assertGreaterEqual(NoticeType.objects.filter(is_active=True).count(), 30)
+        self.assertGreaterEqual(NoticeType.objects.filter(is_active=True, verified_at__isnull=False).count(), 30)
