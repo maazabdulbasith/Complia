@@ -35,13 +35,27 @@ ALLOWED_HOSTS = _env_list("ALLOWED_HOSTS", "localhost,127.0.0.1")
 # CORS/CSRF should always be explicit in deployed environments.
 CORS_ALLOWED_ORIGINS = _env_list("CORS_ALLOWED_ORIGINS")
 CSRF_TRUSTED_ORIGINS = _env_list("CSRF_TRUSTED_ORIGINS")
+SUPERADMIN_EMAILS = {email.lower() for email in _env_list("SUPERADMIN_EMAILS")}
+PARSER_BETA_EMAILS = {email.lower() for email in _env_list("PARSER_BETA_EMAILS")}
+PARSER_PRIVATE_BETA_ENABLED = os.getenv("PARSER_PRIVATE_BETA_ENABLED", "false").lower() in ("true", "1", "yes")
+PARSER_REVIEW_THRESHOLD = float(os.getenv("PARSER_REVIEW_THRESHOLD", "0.75"))
+PARSER_EPHEMERAL_TTL_HOURS = int(os.getenv("PARSER_EPHEMERAL_TTL_HOURS", "1"))
+PARSER_MAX_UPLOAD_MB = int(os.getenv("PARSER_MAX_UPLOAD_MB", "10"))
+ASSISTED_OFFER_ENABLED = os.getenv("ASSISTED_OFFER_ENABLED", "true").lower() in ("true", "1", "yes")
+ASSISTED_OFFER_DEFAULT_KEY = os.getenv("ASSISTED_OFFER_DEFAULT_KEY", "assisted_response_pack_v1")
+ASSISTED_OFFER_TARGET_SEVERITY = os.getenv("ASSISTED_OFFER_TARGET_SEVERITY", "high").strip().lower()
+PUBLIC_SITE_URL = os.getenv("PUBLIC_SITE_URL", "").strip().rstrip("/")
+CASHFREE_APP_ID = os.getenv("CASHFREE_APP_ID", "").strip()
+CASHFREE_SECRET_KEY = os.getenv("CASHFREE_SECRET_KEY", "").strip()
+CASHFREE_ENV = os.getenv("CASHFREE_ENV", "sandbox").strip().lower()
+CASHFREE_WEBHOOK_SECRET = os.getenv("CASHFREE_WEBHOOK_SECRET", "").strip()
+CASHFREE_RETURN_URL = os.getenv("CASHFREE_RETURN_URL", "").strip()
 
 
 # ==============================
 # APPLICATION DEFINITION
 # ==============================
 INSTALLED_APPS = [
-    "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -160,6 +174,12 @@ REST_FRAMEWORK = {
         "user": "1000/hour",
         "feedback": "30/hour",
         "ca_help": "20/hour",
+        "analytics_event": "300/hour",
+        "assisted_intent": "40/hour",
+        "experiment_exposure": "100/hour",
+        "parser_upload": "20/hour",
+        "admin_metrics": "600/hour",
+        "admin_ops": "600/hour",
     },
     "EXCEPTION_HANDLER": "complia_backend.exceptions.custom_exception_handler",
 }
