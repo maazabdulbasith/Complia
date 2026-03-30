@@ -1,6 +1,7 @@
 export interface NoticeType {
     id: number;
     code: string;
+    slug?: string;
     title: string;
     summary: string;
     detailed_explanation: string;
@@ -13,6 +14,8 @@ export interface NoticeType {
     triggers: string[];
     verified_by?: string;
     verified_at?: string;
+    meta_title?: string;
+    meta_description?: string;
     updated_at: string;
 }
 
