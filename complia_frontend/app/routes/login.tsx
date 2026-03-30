@@ -120,6 +120,23 @@ export default function LoginPage() {
             <div className="mt-7 border-t border-slate-200 pt-4 text-xs text-slate-500">
               By signing in, you agree to Complia terms and privacy policy.
             </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+              <Link to="/terms-and-conditions" className="font-semibold text-slate-600 hover:text-blue-700">
+                Terms
+              </Link>
+              <span>·</span>
+              <Link to="/privacy-policy" className="font-semibold text-slate-600 hover:text-blue-700">
+                Privacy
+              </Link>
+              <span>·</span>
+              <Link to="/refund-policy" className="font-semibold text-slate-600 hover:text-blue-700">
+                Refunds
+              </Link>
+              <span>·</span>
+              <Link to="/cancellation-policy" className="font-semibold text-slate-600 hover:text-blue-700">
+                Cancellation
+              </Link>
+            </div>
           </div>
         </section>
       </main>

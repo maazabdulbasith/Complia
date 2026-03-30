@@ -268,6 +268,27 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </div>
           ) : null}
         </section>
+
+        <footer className="mt-12 border-t border-slate-200/80 pt-5 text-xs text-slate-500 sm:mt-14 sm:pt-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>Legal:</span>
+            <Link to="/terms-and-conditions" className="font-semibold text-slate-600 hover:text-blue-700">
+              Terms & Conditions
+            </Link>
+            <span>·</span>
+            <Link to="/privacy-policy" className="font-semibold text-slate-600 hover:text-blue-700">
+              Privacy Policy
+            </Link>
+            <span>·</span>
+            <Link to="/refund-policy" className="font-semibold text-slate-600 hover:text-blue-700">
+              Refund Policy
+            </Link>
+            <span>·</span>
+            <Link to="/cancellation-policy" className="font-semibold text-slate-600 hover:text-blue-700">
+              Cancellation Policy
+            </Link>
+          </div>
+        </footer>
       </main>
     </div>
   );
