@@ -315,6 +315,25 @@ class PaymentOrderCreateSerializer(serializers.Serializer):
         return cleaned
 
 
+class PaymentTestConfirmSerializer(serializers.Serializer):
+    order_id = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    plan_key = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    user_email = serializers.EmailField(required=False, allow_blank=True)
+    provider_payment_id = serializers.CharField(max_length=120, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        order_id = (attrs.get("order_id") or "").strip()
+        plan_key = (attrs.get("plan_key") or "").strip()
+        if not order_id and not plan_key:
+            raise serializers.ValidationError("Provide either order_id or plan_key.")
+        if order_id:
+            attrs["order_id"] = order_id
+        if plan_key:
+            attrs["plan_key"] = plan_key
+        attrs["user_email"] = (attrs.get("user_email") or "").strip().lower()
+        return attrs
+
+
 class PaymentOrderSerializer(serializers.ModelSerializer):
     plan_key = serializers.CharField(source="plan.key", read_only=True)
     amount_inr = serializers.SerializerMethodField()

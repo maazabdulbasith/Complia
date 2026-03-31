@@ -41,6 +41,7 @@ from .serializers import (
     PaymentOrderCreateSerializer,
     PaymentOrderSerializer,
     PaymentPlanSerializer,
+    PaymentTestConfirmSerializer,
     UserDetailSerializer,
     UserEntitlementSerializer,
     WeeklyKpiSnapshotSerializer,
@@ -552,6 +553,124 @@ class PaymentOrderCreateView(generics.GenericAPIView):
             ]
         )
         return Response(PaymentOrderSerializer(payment_order).data, status=status.HTTP_201_CREATED)
+
+
+class PaymentTestConfirmView(generics.GenericAPIView):
+    permission_classes = [IsSuperAdmin]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "admin_ops"
+    serializer_class = PaymentTestConfirmSerializer
+
+    def post(self, request):
+        if not settings.TEST_PAYMENT_API_ENABLED:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Test payment API is disabled.",
+                    "code": "test_payment_api_disabled",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        order_id = serializer.validated_data.get("order_id", "")
+        plan_key = serializer.validated_data.get("plan_key", "")
+        user_email = serializer.validated_data.get("user_email", "")
+        provider_payment_id = serializer.validated_data.get("provider_payment_id", "").strip()
+        provider_status = "SUCCESS"
+
+        payment_order = None
+        if order_id:
+            payment_order = PaymentOrder.objects.filter(order_id=order_id).first()
+            if not payment_order:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Payment order not found.",
+                        "code": "order_not_found",
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        else:
+            plan = PaymentPlan.objects.filter(key=plan_key, is_active=True).first()
+            if not plan:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Selected plan is not available.",
+                        "code": "invalid_plan",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            target_user = request.user
+            if user_email:
+                target_user = User.objects.filter(email__iexact=user_email).first()
+                if not target_user:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Target user not found.",
+                            "code": "user_not_found",
+                        },
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+
+            generated_order_id = f"test-{uuid.uuid4().hex[:24]}"
+            payment_order = PaymentOrder.objects.create(
+                user=target_user,
+                plan=plan,
+                order_id=generated_order_id,
+                provider="cashfree",
+                provider_order_id=generated_order_id,
+                amount_paise=plan.amount_paise,
+                currency=plan.currency,
+                credits=plan.credits,
+                status="payment_pending",
+                metadata={"source": "test_payment_api"},
+            )
+
+        idempotency_key = f"test:{payment_order.order_id}:{provider_payment_id or 'no-payment-id'}:{provider_status}"
+        transaction_row, created = PaymentTransaction.objects.get_or_create(
+            idempotency_key=idempotency_key,
+            defaults={
+                "payment_order": payment_order,
+                "provider_payment_id": provider_payment_id,
+                "provider_status": provider_status,
+                "signature_verified": True,
+                "payload": {
+                    "source": "test_api",
+                    "order_id": payment_order.order_id,
+                    "provider_payment_id": provider_payment_id,
+                    "provider_status": provider_status,
+                },
+                "processed_at": timezone.now(),
+            },
+        )
+
+        if created:
+            _grant_parser_credits_once(payment_order)
+            AnalyticsEvent.objects.create(
+                user=payment_order.user,
+                session_id=f"test-pay-{payment_order.order_id}",
+                event_name="payment_success",
+                path="/payments/test-confirm",
+                metadata={"order_id": payment_order.order_id, "plan_key": payment_order.plan.key},
+            )
+
+        transaction_row.processed_at = timezone.now()
+        transaction_row.save(update_fields=["processed_at"])
+
+        payment_order.refresh_from_db()
+        return Response(
+            {
+                "status": "ok",
+                "duplicate": not created,
+                "order": PaymentOrderSerializer(payment_order).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class CashfreeWebhookView(generics.GenericAPIView):

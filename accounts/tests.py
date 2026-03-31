@@ -338,6 +338,7 @@ class AssistedIntentAndExperimentTests(APITestCase):
 class PaymentsPhase3ATests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="payer@complia.in", password="pass123456")
+        self.admin = User.objects.create_user(email="admin@complia.in", password="pass123456", user_type="admin")
         self.plan, _ = PaymentPlan.objects.get_or_create(
             key="single_use_notice_parse",
             defaults={
@@ -475,3 +476,94 @@ class PaymentsPhase3ATests(APITestCase):
         response = self.client.get("/api/v1/payments/me/entitlements/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["parser_credits"], 2)
+
+    @override_settings(TEST_PAYMENT_API_ENABLED=False)
+    def test_test_payment_confirm_disabled_when_flag_off(self):
+        payment_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-test-disabled-001",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="payment_pending",
+        )
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post(
+            "/api/v1/payments/test/confirm/",
+            {"order_id": payment_order.order_id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "test_payment_api_disabled")
+
+    @override_settings(TEST_PAYMENT_API_ENABLED=True)
+    def test_test_payment_confirm_requires_superadmin(self):
+        payment_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-test-auth-001",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="payment_pending",
+        )
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            "/api/v1/payments/test/confirm/",
+            {"order_id": payment_order.order_id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(TEST_PAYMENT_API_ENABLED=True)
+    def test_test_payment_confirm_grants_credit_idempotently(self):
+        payment_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-test-success-001",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="payment_pending",
+        )
+        self.client.force_authenticate(user=self.admin)
+
+        first = self.client.post(
+            "/api/v1/payments/test/confirm/",
+            {"order_id": payment_order.order_id, "provider_payment_id": "testpay_01"},
+            format="json",
+        )
+        second = self.client.post(
+            "/api/v1/payments/test/confirm/",
+            {"order_id": payment_order.order_id, "provider_payment_id": "testpay_01"},
+            format="json",
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(first.data["duplicate"], False)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.data["duplicate"], True)
+
+        entitlement = UserEntitlement.objects.get(user=self.user)
+        self.assertEqual(entitlement.parser_credits, 1)
+        self.assertEqual(entitlement.lifetime_purchased_credits, 1)
+
+    @override_settings(TEST_PAYMENT_API_ENABLED=True)
+    def test_test_payment_confirm_can_create_and_pay_order(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post(
+            "/api/v1/payments/test/confirm/",
+            {"plan_key": "single_use_notice_parse", "user_email": self.user.email},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "ok")
+        self.assertIn("order", response.data)
+        self.assertEqual(response.data["order"]["status"], "paid")
+
+        entitlement = UserEntitlement.objects.get(user=self.user)
+        self.assertEqual(entitlement.parser_credits, 1)

@@ -1,4 +1,5 @@
 import os
+import string
 import tempfile
 from datetime import timedelta
 
@@ -161,8 +162,20 @@ class ParserUploadView(APIView):
     throttle_scope = "parser_upload"
     parser_classes = [MultiPartParser, FormParser]
 
+    @staticmethod
+    def _looks_like_readable_text(raw_text: str) -> bool:
+        compact = "".join(ch for ch in raw_text if not ch.isspace())
+        if len(compact) < 30:
+            return False
+        alpha_count = sum(ch.isalpha() for ch in compact)
+        alpha_ratio = alpha_count / max(len(compact), 1)
+        printable_count = sum(ch in string.printable for ch in raw_text)
+        printable_ratio = printable_count / max(len(raw_text), 1)
+        return alpha_count >= 30 and alpha_ratio >= 0.2 and printable_ratio >= 0.7
+
     def post(self, request):
-        if not settings.PARSER_PRIVATE_BETA_ENABLED:
+        is_admin_bypass = request.user.is_superuser or getattr(request.user, "user_type", "") == "admin"
+        if not settings.PARSER_PRIVATE_BETA_ENABLED and not is_admin_bypass:
             return Response({"detail": "Parser private beta is disabled."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = ParserUploadSerializer(data=request.data)
@@ -173,7 +186,6 @@ class ParserUploadView(APIView):
         if upload.size > max_size_bytes:
             return Response({"detail": "Uploaded file exceeds size limit."}, status=status.HTTP_400_BAD_REQUEST)
 
-        is_admin_bypass = request.user.is_superuser or getattr(request.user, "user_type", "") == "admin"
         credit_reserved = False
         if not is_admin_bypass:
             with transaction.atomic():
@@ -216,9 +228,22 @@ class ParserUploadView(APIView):
             with open(temp_path, "rb") as temp_file:
                 raw_bytes = temp_file.read()
 
+            mime_type = (getattr(upload, "content_type", "") or "").lower()
+            is_binary_doc = mime_type.startswith("image/") or mime_type == "application/pdf"
+            if is_binary_doc:
+                raise ValueError(
+                    "Image/PDF parsing is not enabled yet. Please upload a text (.txt) notice for parser beta."
+                )
+
             raw_text = raw_bytes[:15000].decode("utf-8", errors="ignore")
+            # Binary uploads (image/pdf) may decode with NUL characters, which
+            # PostgreSQL text fields reject. Strip them before persistence/parsing.
+            raw_text = raw_text.replace("\x00", " ")
+            if not self._looks_like_readable_text(raw_text):
+                raise ValueError("Could not extract readable text from this file. Please upload a clearer text document.")
             notice_code = serializer.validated_data.get("notice_code", "").strip()
             parsed = parse_notice_document(raw_text, upload.name, notice_code)
+            deadline_date = parsed["deadline_date"]
             legal_section = parsed["legal_section"]
             amount_claimed = parsed["amount_claimed"]
             notice = parsed["notice"]
@@ -230,7 +255,7 @@ class ParserUploadView(APIView):
                 user=request.user,
                 notice=notice,
                 original_filename=upload.name,
-                mime_type=getattr(upload, "content_type", "") or "",
+                mime_type=mime_type,
                 status="review_required" if requires_review else "completed",
                 confidence=confidence,
                 is_private_beta=True,
@@ -240,6 +265,7 @@ class ParserUploadView(APIView):
 
             payload = {
                 "notice_code_detected": notice.code if notice else "",
+                "deadline_date": deadline_date.isoformat() if deadline_date else "",
                 "legal_section": legal_section,
                 "amount_claimed": str(amount_claimed) if amount_claimed is not None else "",
                 "confidence": confidence,
@@ -247,9 +273,10 @@ class ParserUploadView(APIView):
 
             ParserExtraction.objects.create(
                 parser_job=parser_job,
+                deadline_date=deadline_date,
                 legal_section=legal_section,
                 amount_claimed=amount_claimed,
-                notice_type_detected=notice.title if notice else "Unknown",
+                notice_type_detected=(notice.title if notice else "Unknown")[:120],
                 confidence=confidence,
                 normalized_payload=payload,
                 raw_text_excerpt=raw_text[:1200],
@@ -266,7 +293,7 @@ class ParserUploadView(APIView):
                 )
 
             return Response(ParserJobSerializer(parser_job).data, status=status.HTTP_201_CREATED)
-        except Exception:
+        except Exception as exc:
             if credit_reserved:
                 with transaction.atomic():
                     entitlement, _ = UserEntitlement.objects.select_for_update().get_or_create(
@@ -287,6 +314,8 @@ class ParserUploadView(APIView):
                             "updated_at",
                         ]
                     )
+            if isinstance(exc, ValueError):
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
             raise
         finally:
             if temp_path and os.path.exists(temp_path):

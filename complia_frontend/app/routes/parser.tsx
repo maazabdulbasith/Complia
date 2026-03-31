@@ -3,16 +3,20 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 
 import {
   ApiClientError,
+  confirmTestPayment,
   createPaymentOrder,
+  getNotice,
   getMyEntitlements,
   getParserResult,
   getPaymentPlans,
+  saveNotice,
   uploadParserFile,
   type ParserJob,
   type PaymentPlan,
   type UserEntitlements,
 } from "../api/client";
 import { trackEvent } from "../lib/analytics";
+import type { NoticeType } from "../types/notice";
 import type { Route } from "./+types/parser";
 
 type CashfreeCheckoutOptions = {
@@ -38,6 +42,7 @@ declare global {
 }
 
 let cashfreeSdkPromise: Promise<void> | null = null;
+const ENABLE_TEST_PAYMENT = String(import.meta.env.VITE_ENABLE_TEST_PAYMENT || "").toLowerCase() === "true";
 
 function loadCashfreeSdk(): Promise<void> {
   if (typeof window === "undefined") {
@@ -100,12 +105,52 @@ export default function ParserUploadPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
+  const [isSimulatingPayment, setIsSimulatingPayment] = useState(false);
   const [paymentRequired, setPaymentRequired] = useState(false);
   const [pendingUpload, setPendingUpload] = useState<{ file: File; noticeCode: string | null } | null>(
     null
   );
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isAdminUser, setIsAdminUser] = useState(false);
+  const [detectedNotice, setDetectedNotice] = useState<NoticeType | null>(null);
+  const [isLoadingNoticeExplain, setIsLoadingNoticeExplain] = useState(false);
+  const [noticeExplainError, setNoticeExplainError] = useState<string | null>(null);
+  const [showFullExcerpt, setShowFullExcerpt] = useState(false);
+  const [isSavingNotice, setIsSavingNotice] = useState(false);
+  const [saveNoticeMessage, setSaveNoticeMessage] = useState<string | null>(null);
+  const [saveNoticeError, setSaveNoticeError] = useState<string | null>(null);
+
+  const toUserMessage = (error: unknown, fallback: string): string => {
+    if (error instanceof ApiClientError) {
+      if (error.status === 401) {
+        return "Your session expired. Please sign in again to continue.";
+      }
+      if (error.status === 402 || error.code === "PAYMENT_REQUIRED") {
+        return "Payment is required before upload. Complete checkout to unlock this parser result.";
+      }
+      if (error.status === 403) {
+        if (error.message.toLowerCase().includes("private beta")) {
+          return "Parser is in private beta for selected users. Contact support to enable access for your account.";
+        }
+        return "Your account does not have parser access yet. Contact support for beta enablement.";
+      }
+      if (error.status === 413) {
+        return "File is too large. Upload a smaller file and retry.";
+      }
+      if (error.status === 429) {
+        return "Too many requests right now. Please wait a minute and retry.";
+      }
+      if (error.status >= 500) {
+        return "Server issue while processing upload. Please retry in a moment.";
+      }
+      return error.message || fallback;
+    }
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+    return fallback;
+  };
 
   const selectedPlan = useMemo(
     () => plans.find((plan) => plan.key === selectedPlanKey) ?? null,
@@ -114,6 +159,17 @@ export default function ParserUploadPage() {
 
   useEffect(() => {
     setIsLoggedIn(Boolean(localStorage.getItem("complia_token")));
+    const raw = localStorage.getItem("user");
+    if (!raw) {
+      setIsAdminUser(false);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as { user_type?: string };
+      setIsAdminUser(parsed.user_type === "admin");
+    } catch {
+      setIsAdminUser(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -174,6 +230,47 @@ export default function ParserUploadPage() {
     return () => window.clearInterval(intervalId);
   }, [parserJob]);
 
+  useEffect(() => {
+    if (!parserJob?.notice_code) {
+      setDetectedNotice(null);
+      setNoticeExplainError(null);
+      setIsLoadingNoticeExplain(false);
+      return;
+    }
+
+    let isCancelled = false;
+    const loadNoticeExplanation = async () => {
+      setIsLoadingNoticeExplain(true);
+      setNoticeExplainError(null);
+      try {
+        const notice = await getNotice(parserJob.notice_code);
+        if (!isCancelled) {
+          setDetectedNotice(notice);
+        }
+      } catch {
+        if (!isCancelled) {
+          setDetectedNotice(null);
+          setNoticeExplainError("Could not load full notice explanation for this result.");
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingNoticeExplain(false);
+        }
+      }
+    };
+
+    void loadNoticeExplanation();
+    return () => {
+      isCancelled = true;
+    };
+  }, [parserJob?.notice_code]);
+
+  useEffect(() => {
+    setShowFullExcerpt(false);
+    setSaveNoticeMessage(null);
+    setSaveNoticeError(null);
+  }, [parserJob?.id]);
+
   const refreshEntitlements = async (): Promise<UserEntitlements | null> => {
     if (!isLoggedIn) {
       setEntitlements(null);
@@ -185,6 +282,35 @@ export default function ParserUploadPage() {
       return latest;
     } catch {
       return entitlements;
+    }
+  };
+
+  const saveDetectedNotice = async (
+    noticeId: number,
+    options?: { source?: "auto" | "manual" }
+  ): Promise<boolean> => {
+    const source = options?.source || "manual";
+    setIsSavingNotice(true);
+    setSaveNoticeError(null);
+    setSaveNoticeMessage(null);
+    try {
+      await saveNotice(noticeId);
+      setSaveNoticeMessage(
+        source === "auto"
+          ? "Notice auto-saved to your account."
+          : "Notice saved to your account."
+      );
+      return true;
+    } catch (error) {
+      const fallback =
+        source === "auto"
+          ? "Parse completed, but auto-save failed. Use the Save button to retry."
+          : "Could not save this notice right now.";
+      const message = toUserMessage(error, fallback);
+      setSaveNoticeError(message);
+      return false;
+    } finally {
+      setIsSavingNotice(false);
     }
   };
 
@@ -204,6 +330,9 @@ export default function ParserUploadPage() {
         parser_job_id: job.id,
         status: job.status,
       });
+      if (job.notice) {
+        void saveDetectedNotice(job.notice, { source: "auto" });
+      }
       void refreshEntitlements();
     } catch (error) {
       if (error instanceof ApiClientError && error.status === 402) {
@@ -211,10 +340,14 @@ export default function ParserUploadPage() {
         setStatusMessage("Payment required. Complete checkout to continue.");
         return;
       }
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Could not process this file right now. Please retry.";
+      if (error instanceof ApiClientError && error.status === 401) {
+        navigate(`/login?next=${encodeURIComponent(`/parser?notice=${noticeCode}`)}`);
+        return;
+      }
+      if (error instanceof ApiClientError && error.status === 403) {
+        setPaymentRequired(false);
+      }
+      const message = toUserMessage(error, "Could not process this file right now. Please retry.");
       setErrorMessage(message);
       setStatusMessage(null);
     } finally {
@@ -323,14 +456,60 @@ export default function ParserUploadPage() {
       setStatusMessage("Payment complete. Verifying and unlocking parser...");
       await verifyPaymentAndResume();
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Could not complete payment. Please retry.";
+      if (error instanceof ApiClientError && error.status === 401) {
+        navigate(`/login?next=${encodeURIComponent(`/parser?notice=${noticeCode}`)}`);
+        return;
+      }
+      const message = toUserMessage(error, "Could not complete payment. Please retry.");
       setErrorMessage(message);
       setStatusMessage(null);
     } finally {
       setIsProcessingPayment(false);
+    }
+  };
+
+  const startTestPaymentSimulation = async () => {
+    if (!isLoggedIn) {
+      navigate(`/login?next=${encodeURIComponent(`/parser?notice=${noticeCode}`)}`);
+      return;
+    }
+    if (!selectedPlanKey) {
+      setErrorMessage("No payment plan available for test simulation.");
+      return;
+    }
+
+    setIsSimulatingPayment(true);
+    setErrorMessage(null);
+    setStatusMessage("Simulating successful payment and adding credits...");
+    try {
+      const rawUser = localStorage.getItem("user");
+      const userEmail =
+        rawUser && rawUser !== ""
+          ? ((JSON.parse(rawUser) as { email?: string }).email || "")
+          : "";
+
+      await confirmTestPayment({
+        plan_key: selectedPlanKey,
+        user_email: userEmail || undefined,
+      });
+
+      const latest = await refreshEntitlements();
+      setPaymentRequired(false);
+      setStatusMessage("Test payment confirmed. Credits updated.");
+
+      if (pendingUpload && (latest?.parser_credits || 0) > 0) {
+        await performUpload(pendingUpload.file, pendingUpload.noticeCode || undefined);
+      }
+    } catch (error) {
+      if (error instanceof ApiClientError && error.status === 401) {
+        navigate(`/login?next=${encodeURIComponent(`/parser?notice=${noticeCode}`)}`);
+        return;
+      }
+      const message = toUserMessage(error, "Could not simulate test payment. Please retry.");
+      setErrorMessage(message);
+      setStatusMessage(null);
+    } finally {
+      setIsSimulatingPayment(false);
     }
   };
 
@@ -353,6 +532,14 @@ export default function ParserUploadPage() {
     const uploadDraft = { file: selectedFile, noticeCode: noticeCode.trim() || null };
     setPendingUpload(uploadDraft);
     await performUpload(uploadDraft.file, uploadDraft.noticeCode || undefined);
+  };
+
+  const handleSaveNotice = async () => {
+    if (!parserJob?.notice) {
+      setSaveNoticeError("Notice is not detected yet, so it cannot be saved.");
+      return;
+    }
+    await saveDetectedNotice(parserJob.notice, { source: "manual" });
   };
 
   return (
@@ -487,14 +674,129 @@ export default function ParserUploadPage() {
                 </div>
                 {parserJob.extraction?.raw_text_excerpt && (
                   <div className="rounded-xl border border-slate-200 bg-white p-3">
-                    <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">
-                      Text excerpt
-                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">
+                        Text excerpt
+                      </p>
+                      {parserJob.extraction.raw_text_excerpt.length > 420 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowFullExcerpt((value) => !value)}
+                          className="text-xs font-semibold text-blue-700 transition hover:text-blue-800"
+                        >
+                          {showFullExcerpt ? "Hide full text" : "Show full text"}
+                        </button>
+                      )}
+                    </div>
                     <p className="mt-1 text-sm leading-6 text-slate-700">
-                      {parserJob.extraction.raw_text_excerpt}
+                      {showFullExcerpt
+                        ? parserJob.extraction.raw_text_excerpt
+                        : `${parserJob.extraction.raw_text_excerpt.slice(0, 420)}${
+                            parserJob.extraction.raw_text_excerpt.length > 420 ? "..." : ""
+                          }`}
                     </p>
                   </div>
                 )}
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Understand this notice
+                  </p>
+
+                  {isLoadingNoticeExplain && (
+                    <p className="mt-2 text-sm text-slate-600">Loading plain-English explanation...</p>
+                  )}
+
+                  {noticeExplainError && (
+                    <p className="mt-2 text-sm text-rose-700">{noticeExplainError}</p>
+                  )}
+
+                  {!isLoadingNoticeExplain && !noticeExplainError && detectedNotice && (
+                    <div className="mt-3 space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white">
+                          {detectedNotice.code}
+                        </span>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                            detectedNotice.severity === "high"
+                              ? "bg-rose-100 text-rose-700"
+                              : detectedNotice.severity === "medium"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-emerald-100 text-emerald-700"
+                          }`}
+                        >
+                          {detectedNotice.severity} severity
+                        </span>
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{detectedNotice.title}</p>
+                        <p className="mt-1 text-sm leading-6 text-slate-700">{detectedNotice.summary}</p>
+                      </div>
+
+                      {detectedNotice.why_received && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                            Why you likely got this
+                          </p>
+                          <p className="mt-1 text-sm leading-6 text-slate-700">{detectedNotice.why_received}</p>
+                        </div>
+                      )}
+
+                      {detectedNotice.consequences_of_ignoring && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                            If you ignore this
+                          </p>
+                          <p className="mt-1 text-sm leading-6 text-slate-700">
+                            {detectedNotice.consequences_of_ignoring}
+                          </p>
+                        </div>
+                      )}
+
+                      {detectedNotice.next_steps && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                            What to do next
+                          </p>
+                          <p className="mt-1 whitespace-pre-line text-sm leading-6 text-slate-700">
+                            {detectedNotice.next_steps}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!isLoadingNoticeExplain && !noticeExplainError && !detectedNotice && (
+                    <p className="mt-2 text-sm text-slate-600">
+                      We extracted fields, but could not confidently map this to a known notice yet.
+                      Enter notice code manually for a clearer explanation.
+                    </p>
+                  )}
+
+                  <div className="mt-4 border-t border-slate-200 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveNotice()}
+                      disabled={isSavingNotice || !parserJob.notice}
+                      className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isSavingNotice ? "Saving..." : "Save notice to account"}
+                    </button>
+                    {!parserJob.notice && (
+                      <p className="mt-2 text-xs text-slate-500">
+                        Save becomes available after notice detection.
+                      </p>
+                    )}
+                    {saveNoticeMessage && (
+                      <p className="mt-2 text-sm text-emerald-700">{saveNoticeMessage}</p>
+                    )}
+                    {saveNoticeError && (
+                      <p className="mt-2 text-sm text-rose-700">{saveNoticeError}</p>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -578,6 +880,28 @@ export default function ParserUploadPage() {
                     className="inline-flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:opacity-60"
                   >
                     I already paid, check again
+                  </button>
+                </div>
+              )}
+
+              {ENABLE_TEST_PAYMENT && isLoggedIn && isAdminUser && (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-700">
+                    Internal testing
+                  </p>
+                  <p className="mt-1 text-xs text-amber-800">
+                    Simulates payment success and credits without charging a real payment method.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void startTestPaymentSimulation()}
+                    disabled={isSimulatingPayment || isUploading || isProcessingPayment || isVerifyingPayment || !selectedPlan}
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-60"
+                  >
+                    {isSimulatingPayment && (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-300 border-t-amber-700" />
+                    )}
+                    {isSimulatingPayment ? "Simulating payment..." : "Simulate Payment Success"}
                   </button>
                 </div>
               )}

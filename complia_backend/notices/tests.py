@@ -244,6 +244,23 @@ class NoticeAPITests(APITestCase):
         response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_parser_upload_admin_allowed_when_private_beta_disabled(self):
+        admin = User.objects.create_user(
+            email="admin-beta-off@complia.in",
+            password="pass123456",
+            user_type="admin",
+            is_superuser=True,
+            is_staff=True,
+        )
+        self.client.force_authenticate(user=admin)
+        upload = SimpleUploadedFile(
+            "GST-DRC-01-admin.txt",
+            b"Demand notice under Section 73 with INR 1000.",
+            content_type="text/plain",
+        )
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
     @override_settings(PARSER_PRIVATE_BETA_ENABLED=True, PARSER_BETA_EMAILS={"beta@complia.in"})
     def test_parser_upload_and_result_flow(self):
         beta_user = User.objects.create_user(email="beta@complia.in", password="pass123456", user_type="taxpayer")
@@ -271,6 +288,40 @@ class NoticeAPITests(APITestCase):
         self.assertEqual(entitlement.parser_credits, 0)
         self.assertEqual(entitlement.lifetime_consumed_credits, 1)
 
+    @override_settings(PARSER_PRIVATE_BETA_ENABLED=True, PARSER_BETA_EMAILS={"betaasmt@complia.in"})
+    def test_parser_upload_extracts_notice_section_and_deadline_from_asmt_style_text(self):
+        beta_user = User.objects.create_user(email="betaasmt@complia.in", password="pass123456", user_type="taxpayer")
+        UserEntitlement.objects.create(
+            user=beta_user,
+            parser_credits=1,
+            lifetime_purchased_credits=1,
+            lifetime_consumed_credits=0,
+        )
+        NoticeType.objects.create(
+            code="GST-ASMT-10",
+            title="Scrutiny of Returns",
+            summary="Scrutiny notice",
+            detailed_explanation="Explanation",
+            consequences_of_ignoring="Penalty",
+            next_steps="Reply",
+            severity="medium",
+            is_active=True,
+        )
+        self.client.force_authenticate(user=beta_user)
+        asmt_text = (
+            "GST ASMT - 10 [See rule 99(1)]\n"
+            "Notice for intimating discrepancies in the return after scrutiny.\n"
+            "Section under which notice is issued: 61\n"
+            "Date by which reply has to be submitted: 23/12/2024\n"
+            "Type of Return: GSTR-3B\n"
+        )
+        upload = SimpleUploadedFile("ASMT10.txt", asmt_text.encode("utf-8"), content_type="text/plain")
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["notice_code"], "GST-ASMT-10")
+        self.assertEqual(response.data["extraction"]["legal_section"], "Section 61")
+        self.assertEqual(response.data["extraction"]["deadline_date"], "2024-12-23")
+
     @override_settings(PARSER_PRIVATE_BETA_ENABLED=True, PARSER_BETA_EMAILS={"beta2@complia.in"})
     def test_parser_upload_returns_402_when_no_credits(self):
         beta_user = User.objects.create_user(email="beta2@complia.in", password="pass123456", user_type="taxpayer")
@@ -283,6 +334,106 @@ class NoticeAPITests(APITestCase):
         response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
         self.assertEqual(response.status_code, status.HTTP_402_PAYMENT_REQUIRED)
         self.assertEqual(response.data["code"], "PAYMENT_REQUIRED")
+
+    @override_settings(PARSER_PRIVATE_BETA_ENABLED=True, PARSER_BETA_EMAILS={"beta3@complia.in"})
+    def test_parser_upload_handles_oversized_amount_without_500(self):
+        beta_user = User.objects.create_user(email="beta3@complia.in", password="pass123456", user_type="taxpayer")
+        UserEntitlement.objects.create(
+            user=beta_user,
+            parser_credits=1,
+            lifetime_purchased_credits=1,
+            lifetime_consumed_credits=0,
+        )
+        self.client.force_authenticate(user=beta_user)
+        upload = SimpleUploadedFile(
+            "amount-overflow.txt",
+            b"Notice text with Section 73 and INR 12345678901234567890.",
+            content_type="text/plain",
+        )
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(response.data["extraction"]["amount_claimed"])
+
+    @override_settings(PARSER_PRIVATE_BETA_ENABLED=True, PARSER_BETA_EMAILS={"beta4@complia.in"})
+    def test_parser_upload_handles_oversized_section_without_500(self):
+        beta_user = User.objects.create_user(email="beta4@complia.in", password="pass123456", user_type="taxpayer")
+        UserEntitlement.objects.create(
+            user=beta_user,
+            parser_credits=1,
+            lifetime_purchased_credits=1,
+            lifetime_consumed_credits=0,
+        )
+        self.client.force_authenticate(user=beta_user)
+        large_section_token = "A" * 400
+        upload = SimpleUploadedFile(
+            "section-overflow.txt",
+            f"Notice text with section {large_section_token}".encode("utf-8"),
+            content_type="text/plain",
+        )
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertLessEqual(len(response.data["extraction"]["legal_section"] or ""), 120)
+
+    @override_settings(PARSER_PRIVATE_BETA_ENABLED=True, PARSER_BETA_EMAILS={"beta5@complia.in"})
+    def test_parser_upload_sanitizes_nul_bytes_for_text_payload(self):
+        beta_user = User.objects.create_user(email="beta5@complia.in", password="pass123456", user_type="taxpayer")
+        UserEntitlement.objects.create(
+            user=beta_user,
+            parser_credits=1,
+            lifetime_purchased_credits=1,
+            lifetime_consumed_credits=0,
+        )
+        self.client.force_authenticate(user=beta_user)
+        text_with_nul_bytes = (
+            b"\x00This notice under section sixty one requests a detailed response before deadline"
+            b"\x00 amount INR 12345 and tax discrepancy explanation required immediately\x00"
+        )
+        upload = SimpleUploadedFile(
+            "notice.txt",
+            text_with_nul_bytes,
+            content_type="text/plain",
+        )
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertNotIn("\x00", response.data["extraction"]["raw_text_excerpt"])
+
+    @override_settings(PARSER_PRIVATE_BETA_ENABLED=True, PARSER_BETA_EMAILS={"beta6@complia.in"})
+    def test_parser_upload_unreadable_binary_returns_400_and_refunds_credit(self):
+        beta_user = User.objects.create_user(email="beta6@complia.in", password="pass123456", user_type="taxpayer")
+        UserEntitlement.objects.create(
+            user=beta_user,
+            parser_credits=1,
+            lifetime_purchased_credits=1,
+            lifetime_consumed_credits=0,
+        )
+        self.client.force_authenticate(user=beta_user)
+        unreadable_binary = b"\x00\x01\x02\x03\xff\xd8\xff\xe0\x00\x10WEBP\x00\x00\x00\x01\x02\x03\x04"
+        upload = SimpleUploadedFile("scan.jpg", unreadable_binary, content_type="image/jpeg")
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Image/PDF parsing is not enabled yet", response.data["detail"])
+        entitlement = UserEntitlement.objects.get(user=beta_user)
+        self.assertEqual(entitlement.parser_credits, 1)
+        self.assertEqual(entitlement.lifetime_consumed_credits, 0)
+
+    @override_settings(PARSER_PRIVATE_BETA_ENABLED=True, PARSER_BETA_EMAILS={"beta7@complia.in"})
+    def test_parser_upload_image_rejected_even_if_decodable(self):
+        beta_user = User.objects.create_user(email="beta7@complia.in", password="pass123456", user_type="taxpayer")
+        UserEntitlement.objects.create(
+            user=beta_user,
+            parser_credits=1,
+            lifetime_purchased_credits=1,
+            lifetime_consumed_credits=0,
+        )
+        self.client.force_authenticate(user=beta_user)
+        image_like_with_ascii = b"RIFFWEBPVP8 this looks decodable but is still an image payload"
+        upload = SimpleUploadedFile("scan.webp", image_like_with_ascii, content_type="image/webp")
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Image/PDF parsing is not enabled yet", response.data["detail"])
+        entitlement = UserEntitlement.objects.get(user=beta_user)
+        self.assertEqual(entitlement.parser_credits, 1)
+        self.assertEqual(entitlement.lifetime_consumed_credits, 0)
 
     @override_settings(PARSER_PRIVATE_BETA_ENABLED=True)
     def test_superadmin_parser_review_update(self):

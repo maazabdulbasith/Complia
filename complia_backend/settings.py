@@ -11,7 +11,8 @@ from pathlib import Path
 import dj_database_url
 from dotenv import load_dotenv
 
-load_dotenv()
+# Ensure local `.env` values take precedence over stale shell/session vars.
+load_dotenv(override=True)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 TESTING = "test" in sys.argv
@@ -50,6 +51,7 @@ CASHFREE_SECRET_KEY = os.getenv("CASHFREE_SECRET_KEY", "").strip()
 CASHFREE_ENV = os.getenv("CASHFREE_ENV", "sandbox").strip().lower()
 CASHFREE_WEBHOOK_SECRET = os.getenv("CASHFREE_WEBHOOK_SECRET", "").strip()
 CASHFREE_RETURN_URL = os.getenv("CASHFREE_RETURN_URL", "").strip()
+TEST_PAYMENT_API_ENABLED = os.getenv("TEST_PAYMENT_API_ENABLED", "false").lower() in ("true", "1", "yes")
 
 
 # ==============================

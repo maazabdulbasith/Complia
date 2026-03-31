@@ -255,9 +255,23 @@ export type UserEntitlements = {
   updated_at: string;
 };
 
+export type PaymentTestConfirmRequest = {
+  order_id?: string;
+  plan_key?: string;
+  user_email?: string;
+  provider_payment_id?: string;
+};
+
+export type PaymentTestConfirmResponse = {
+  status: "ok";
+  duplicate: boolean;
+  order: PaymentOrder;
+};
+
 type ApiErrorEnvelope = {
   status?: string;
   message?: string;
+  detail?: string;
   code?: string;
   errors?: Record<string, unknown>;
   details?: unknown;
@@ -327,6 +341,9 @@ function deriveMessageFromEnvelope(envelope: ApiErrorEnvelope | null, fallback: 
   }
   if (envelope.message) {
     return envelope.message;
+  }
+  if (envelope.detail) {
+    return envelope.detail;
   }
   if (envelope.errors && typeof envelope.errors === "object") {
     const [firstKey] = Object.keys(envelope.errors);
@@ -607,6 +624,18 @@ export async function getMyEntitlements(): Promise<UserEntitlements> {
   const response = await fetchWithAuth(`${API_BASE}/payments/me/entitlements/`);
   if (!response.ok) {
     throw await buildApiClientError(response, "Failed to fetch entitlements");
+  }
+  return response.json();
+}
+
+export async function confirmTestPayment(payload: PaymentTestConfirmRequest): Promise<PaymentTestConfirmResponse> {
+  const response = await fetchWithAuth(`${API_BASE}/payments/test/confirm/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await buildApiClientError(response, "Failed to simulate payment");
   }
   return response.json();
 }
