@@ -27,10 +27,12 @@ from accounts.views import (
     GoogleLogin,
     MyEntitlementsView,
     PaymentOrderCreateView,
+    PaymentOrderGrantCreditsView,
     PaymentPlanListView,
     PaymentTestConfirmView,
     SuperAdminAssistedIntentViewSet,
     SuperAdminCAHelpRequestViewSet,
+    SuperAdminCsvExportView,
     SuperAdminFunnelView,
     SuperAdminKpiView,
     SuperAdminMetricsView,
@@ -64,6 +66,7 @@ urlpatterns = [
         path('assisted-intent/', AssistedIntentCreateView.as_view(), name='assisted-intent-create'),
         path('payments/plans/', PaymentPlanListView.as_view(), name='payment-plans'),
         path('payments/orders/', PaymentOrderCreateView.as_view(), name='payment-orders-create'),
+        path('admin/payments/<str:order_id>/grant-credits/', PaymentOrderGrantCreditsView.as_view(), name='admin-payment-grant-credits'),
         path('payments/test/confirm/', PaymentTestConfirmView.as_view(), name='payment-test-confirm'),
         path('payments/webhooks/cashfree/', CashfreeWebhookView.as_view(), name='payment-webhook-cashfree'),
         path('payments/me/entitlements/', MyEntitlementsView.as_view(), name='payment-me-entitlements'),
@@ -74,6 +77,7 @@ urlpatterns = [
         path('admin/metrics/', SuperAdminMetricsView.as_view(), name='superadmin-metrics'),
         path('admin/funnel/', SuperAdminFunnelView.as_view(), name='superadmin-funnel'),
         path('admin/kpis/', SuperAdminKpiView.as_view(), name='superadmin-kpis'),
+        path('admin/exports/<str:report_key>/', SuperAdminCsvExportView.as_view(), name='superadmin-export-csv'),
         path('admin/', include(admin_router_v1.urls)),
         
         # Authentication & Accounts

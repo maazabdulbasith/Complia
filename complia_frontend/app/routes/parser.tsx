@@ -80,6 +80,42 @@ function formatCurrencyINR(amountInr: number): string {
   }).format(amountInr);
 }
 
+function daysUntil(deadlineIso: string | null): number | null {
+  if (!deadlineIso) {
+    return null;
+  }
+  const deadline = new Date(`${deadlineIso}T00:00:00`);
+  if (Number.isNaN(deadline.getTime())) {
+    return null;
+  }
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffMs = deadline.getTime() - today.getTime();
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+}
+
+function urgencyLabel(severity: "low" | "medium" | "high", daysLeft: number | null): string {
+  if (daysLeft !== null && daysLeft < 0) {
+    return "Overdue: immediate action required";
+  }
+  if (severity === "high") {
+    if (daysLeft !== null && daysLeft <= 3) {
+      return "Critical: respond today";
+    }
+    return "High risk: handle urgently";
+  }
+  if (severity === "medium") {
+    if (daysLeft !== null && daysLeft <= 5) {
+      return "Important: respond this week";
+    }
+    return "Moderate risk: do not delay";
+  }
+  if (daysLeft !== null && daysLeft <= 7) {
+    return "Action needed soon";
+  }
+  return "Low risk: schedule and respond";
+}
+
 export function meta({}: Route.MetaArgs) {
   return [
     { title: "Complia | Upload Notice & Understand" },
@@ -156,6 +192,11 @@ export default function ParserUploadPage() {
     () => plans.find((plan) => plan.key === selectedPlanKey) ?? null,
     [plans, selectedPlanKey]
   );
+  const deadlineDaysLeft = parserJob?.extraction?.deadline_date
+    ? daysUntil(parserJob.extraction.deadline_date)
+    : null;
+  const severityForGuidance = detectedNotice?.severity || "medium";
+  const urgencyText = urgencyLabel(severityForGuidance, deadlineDaysLeft);
 
   useEffect(() => {
     setIsLoggedIn(Boolean(localStorage.getItem("complia_token")));
@@ -603,7 +644,7 @@ export default function ParserUploadPage() {
                   className="w-full rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-slate-700"
                 />
                 <p className="mt-1 text-xs text-slate-500">
-                  Supported: PDF, PNG, JPG, TXT. Max size follows backend limits.
+                  Parser beta currently supports text files only (`.txt`). OCR for image/PDF is coming next.
                 </p>
               </div>
 
@@ -670,6 +711,23 @@ export default function ParserUploadPage() {
                     <p className="mt-1 text-sm font-semibold text-slate-900">
                       {parserJob.extraction?.amount_claimed || "Not detected"}
                     </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-3">
+                    <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Reply deadline</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">
+                      {parserJob.extraction?.deadline_date || "Not detected"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-3">
+                    <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Urgency guidance</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">{urgencyText}</p>
+                    {deadlineDaysLeft !== null && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        {deadlineDaysLeft < 0
+                          ? `${Math.abs(deadlineDaysLeft)} day(s) overdue`
+                          : `${deadlineDaysLeft} day(s) remaining`}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {parserJob.extraction?.raw_text_excerpt && (

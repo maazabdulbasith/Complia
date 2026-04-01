@@ -255,6 +255,13 @@ export type UserEntitlements = {
   updated_at: string;
 };
 
+export type AdminCsvReportKey =
+  | "ca_requests"
+  | "assisted_intents"
+  | "feedback"
+  | "notice_qa"
+  | "parser_jobs";
+
 export type PaymentTestConfirmRequest = {
   order_id?: string;
   plan_key?: string;
@@ -852,4 +859,25 @@ export async function getAdminParserBenchmarks(): Promise<ParserBenchmarkRun[]> 
     return data;
   }
   throw new Error("Unexpected parser benchmark response format");
+}
+
+export async function downloadAdminCsvReport(
+  reportKey: AdminCsvReportKey,
+  statusFilter?: string
+): Promise<void> {
+  const query = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : "";
+  const response = await fetchWithAuth(`${API_BASE}/admin/exports/${reportKey}/${query}`);
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Failed to download CSV report"));
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `complia_${reportKey}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  window.URL.revokeObjectURL(url);
 }

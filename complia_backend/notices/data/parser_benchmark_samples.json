@@ -40,5 +40,103 @@
     "expected_notice_code": "",
     "expected_legal_section": "",
     "expected_amount": null
+  },
+  {
+    "filename": "asmt10-table-style.txt",
+    "text": "GST ASMT - 10 notice. Section under which notice is issued: 61. Date by which reply has to be submitted: 23/12/2024.",
+    "expected_notice_code": "GST-ASMT-10",
+    "expected_legal_section": "Section 61",
+    "expected_amount": null
+  },
+  {
+    "filename": "drc01b-auto-intimation.txt",
+    "text": "Intimation in GST-DRC-01B for GSTR mismatch. Please pay INR 84210 or submit explanation.",
+    "expected_notice_code": "GST-DRC-01B",
+    "expected_legal_section": "",
+    "expected_amount": "84210"
+  },
+  {
+    "filename": "drc01c-itc-gap.txt",
+    "text": "GST-DRC-01C issued for excess ITC under Rule 88D.",
+    "expected_notice_code": "GST-DRC-01C",
+    "expected_legal_section": "Rule 88D",
+    "expected_amount": null
+  },
+  {
+    "filename": "gstr3a-late-filing.txt",
+    "text": "Notice GSTR-3A generated for non-filing under Section 46.",
+    "expected_notice_code": "GSTR-3A",
+    "expected_legal_section": "Section 46",
+    "expected_amount": null
+  },
+  {
+    "filename": "reg03-clarification.txt",
+    "text": "GST-REG-03 clarification required for registration documents under Rule 9.",
+    "expected_notice_code": "GST-REG-03",
+    "expected_legal_section": "Rule 9",
+    "expected_amount": null
+  },
+  {
+    "filename": "reg17-cancellation.txt",
+    "text": "GST REG 17 show cause for cancellation under Section 29. Reply by 10-04-2026.",
+    "expected_notice_code": "GST-REG-17",
+    "expected_legal_section": "Section 29",
+    "expected_amount": null
+  },
+  {
+    "filename": "it148-reopen.txt",
+    "text": "Notice u/s 148 for escaped income. Tax demand INR 430000.",
+    "expected_notice_code": "IT-148",
+    "expected_legal_section": "Section 148",
+    "expected_amount": "430000"
+  },
+  {
+    "filename": "it245-refund-adjustment.txt",
+    "text": "Intimation under Section 245 to adjust refund against outstanding demand.",
+    "expected_notice_code": "IT-245",
+    "expected_legal_section": "Section 245",
+    "expected_amount": null
+  },
+  {
+    "filename": "summons-section70.txt",
+    "text": "GST summons issued under Section 70 to appear for evidence.",
+    "expected_notice_code": "GST-SUMMONS",
+    "expected_legal_section": "Section 70",
+    "expected_amount": null
+  },
+  {
+    "filename": "cmp05-composition.txt",
+    "text": "Show cause in GST-CMP-05 for composition ineligibility under Rule 6.",
+    "expected_notice_code": "GST-CMP-05",
+    "expected_legal_section": "Rule 6",
+    "expected_amount": null
+  },
+  {
+    "filename": "drc07-final-demand.txt",
+    "text": "Final demand in GST-DRC-07 under Section 74 for INR 99875.",
+    "expected_notice_code": "GST-DRC-07",
+    "expected_legal_section": "Section 74",
+    "expected_amount": "99875"
+  },
+  {
+    "filename": "mov02-detention.txt",
+    "text": "Order GST-MOV-02 issued during interception. Proceedings initiated under Section 129.",
+    "expected_notice_code": "GST-MOV-02",
+    "expected_legal_section": "Section 129",
+    "expected_amount": null
+  },
+  {
+    "filename": "it1431-intimation.txt",
+    "text": "CPC intimation under section 143(1). No demand no refund.",
+    "expected_notice_code": "IT-143(1)",
+    "expected_legal_section": "Section 143(1)",
+    "expected_amount": null
+  },
+  {
+    "filename": "noise-document.txt",
+    "text": "Team reminder: submit monthly compliance workbook before Friday.",
+    "expected_notice_code": "",
+    "expected_legal_section": "",
+    "expected_amount": null
   }
 ]

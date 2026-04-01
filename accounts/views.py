@@ -1,13 +1,17 @@
 import hashlib
+import hashlib
 import hmac
 import json
 import uuid
+import csv
 from datetime import timedelta
+from io import StringIO
 
 import requests
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q
+from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare
 from rest_framework import filters, generics, mixins, permissions, status, viewsets
@@ -30,6 +34,7 @@ from .models import (
     WeeklyKpiSnapshot,
 )
 from .permissions import IsSuperAdmin
+from .payment_ops import grant_parser_credits_once, is_failure_status, is_order_credit_eligible, is_success_status
 from .serializers import (
     AdminAssistedIntentSerializer,
     AdminCAHelpRequestSerializer,
@@ -193,48 +198,16 @@ def _cashfree_signature_valid(raw_body: bytes, signature: str, timestamp: str = 
     return False
 
 
-def _success_status(value: str) -> bool:
-    return value.strip().upper() in {"SUCCESS", "PAID", "COMPLETED", "CAPTURED"}
+def _csv_response(filename: str, headers: list[str], rows: list[list[str]]) -> HttpResponse:
+    buffer = StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow(row)
 
-
-def _failure_status(value: str) -> bool:
-    return value.strip().upper() in {"FAILED", "FAILURE", "CANCELLED", "CANCELED", "DECLINED"}
-
-
-def _grant_parser_credits_once(payment_order: PaymentOrder) -> None:
-    with transaction.atomic():
-        locked_order = PaymentOrder.objects.select_for_update().get(pk=payment_order.pk)
-        if locked_order.credit_granted_at:
-            return
-        if not locked_order.user_id:
-            locked_order.status = "paid"
-            locked_order.paid_at = locked_order.paid_at or timezone.now()
-            locked_order.save(update_fields=["status", "paid_at", "updated_at"])
-            return
-
-        entitlement, _ = UserEntitlement.objects.select_for_update().get_or_create(
-            user=locked_order.user,
-            defaults={
-                "parser_credits": 0,
-                "lifetime_purchased_credits": 0,
-                "lifetime_consumed_credits": 0,
-            },
-        )
-        entitlement.parser_credits += locked_order.credits
-        entitlement.lifetime_purchased_credits += locked_order.credits
-        entitlement.save(
-            update_fields=[
-                "parser_credits",
-                "lifetime_purchased_credits",
-                "updated_at",
-            ]
-        )
-
-        now = timezone.now()
-        locked_order.credit_granted_at = now
-        locked_order.paid_at = locked_order.paid_at or now
-        locked_order.status = "paid"
-        locked_order.save(update_fields=["credit_granted_at", "paid_at", "status", "updated_at"])
+    response = HttpResponse(buffer.getvalue(), content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 class GoogleLogin(APIView):
@@ -650,7 +623,7 @@ class PaymentTestConfirmView(generics.GenericAPIView):
         )
 
         if created:
-            _grant_parser_credits_once(payment_order)
+            grant_parser_credits_once(payment_order)
             AnalyticsEvent.objects.create(
                 user=payment_order.user,
                 session_id=f"test-pay-{payment_order.order_id}",
@@ -756,8 +729,8 @@ class CashfreeWebhookView(generics.GenericAPIView):
         if not created:
             return Response({"status": "ok", "duplicate": True}, status=status.HTTP_200_OK)
 
-        if _success_status(provider_status):
-            _grant_parser_credits_once(payment_order)
+        if is_success_status(provider_status):
+            grant_parser_credits_once(payment_order)
             AnalyticsEvent.objects.create(
                 user=payment_order.user,
                 session_id=f"pay-{payment_order.order_id}",
@@ -765,7 +738,7 @@ class CashfreeWebhookView(generics.GenericAPIView):
                 path="/payments/webhook",
                 metadata={"order_id": payment_order.order_id, "plan_key": payment_order.plan.key},
             )
-        elif _failure_status(provider_status):
+        elif is_failure_status(provider_status):
             payment_order.status = "failed"
             payment_order.failure_reason = provider_status or "Payment failed"
             payment_order.save(update_fields=["status", "failure_reason", "updated_at"])
@@ -800,6 +773,55 @@ class MyEntitlementsView(generics.GenericAPIView):
             },
         )
         return Response(UserEntitlementSerializer(entitlement).data)
+
+
+class PaymentOrderGrantCreditsView(generics.GenericAPIView):
+    permission_classes = [IsSuperAdmin]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "admin_ops"
+
+    def post(self, request, order_id: str):
+        payment_order = PaymentOrder.objects.filter(order_id=order_id).first()
+        if not payment_order:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Payment order not found.",
+                    "code": "order_not_found",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not is_order_credit_eligible(payment_order):
+            payment_order.refresh_from_db()
+            if payment_order.credit_granted_at:
+                return Response(
+                    {
+                        "status": "ok",
+                        "duplicate": True,
+                        "order": PaymentOrderSerializer(payment_order).data,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Order is not eligible for credit grant.",
+                    "code": "order_not_eligible",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        grant_parser_credits_once(payment_order)
+        payment_order.refresh_from_db()
+        return Response(
+            {
+                "status": "ok",
+                "duplicate": False,
+                "order": PaymentOrderSerializer(payment_order).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class SuperAdminMetricsView(generics.GenericAPIView):
@@ -886,6 +908,192 @@ class SuperAdminKpiView(generics.GenericAPIView):
                 "current": _compute_kpi_metrics(window),
                 "weekly_snapshots": WeeklyKpiSnapshotSerializer(snapshots, many=True).data,
             }
+        )
+
+
+class SuperAdminCsvExportView(generics.GenericAPIView):
+    permission_classes = [IsSuperAdmin]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "admin_ops"
+
+    def get(self, request, report_key: str):
+        report_key = (report_key or "").strip().lower()
+        if report_key == "ca_requests":
+            return self._export_ca_requests(request)
+        if report_key == "assisted_intents":
+            return self._export_assisted_intents(request)
+        if report_key == "feedback":
+            return self._export_feedback(request)
+        if report_key == "notice_qa":
+            return self._export_notice_qa(request)
+        if report_key == "parser_jobs":
+            return self._export_parser_jobs(request)
+        return Response(
+            {"detail": "Unknown report key."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    def _export_ca_requests(self, request):
+        queryset = CAHelpRequest.objects.all().order_by("-created_at")
+        status_filter = (request.query_params.get("status") or "").strip()
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        rows = [
+            [
+                str(item.id),
+                item.notice_code,
+                item.name,
+                item.email,
+                item.phone_number or "",
+                item.status,
+                item.priority,
+                item.assigned_to_email or "",
+                item.created_at.isoformat(),
+            ]
+            for item in queryset
+        ]
+        return _csv_response(
+            "complia_ca_requests.csv",
+            ["id", "notice_code", "name", "email", "phone_number", "status", "priority", "assigned_to", "created_at"],
+            rows,
+        )
+
+    def _export_assisted_intents(self, request):
+        queryset = AssistedIntent.objects.select_related("notice", "offer").all().order_by("-created_at")
+        status_filter = (request.query_params.get("status") or "").strip()
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        rows = [
+            [
+                str(item.id),
+                item.notice_code_snapshot or "",
+                item.notice.title if item.notice else "",
+                item.name or "",
+                item.email or "",
+                item.phone_number or "",
+                item.status,
+                item.experiment_key or "",
+                item.experiment_variant or "",
+                item.created_at.isoformat(),
+            ]
+            for item in queryset
+        ]
+        return _csv_response(
+            "complia_assisted_intents.csv",
+            [
+                "id",
+                "notice_code_snapshot",
+                "notice_title",
+                "name",
+                "email",
+                "phone_number",
+                "status",
+                "experiment_key",
+                "experiment_variant",
+                "created_at",
+            ],
+            rows,
+        )
+
+    def _export_feedback(self, request):
+        from complia_backend.notices.models import NoticeFeedback
+
+        queryset = NoticeFeedback.objects.select_related("notice").all().order_by("-created_at")
+        status_filter = (request.query_params.get("status") or "").strip()
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        rows = [
+            [
+                str(item.id),
+                item.notice.code if item.notice else "",
+                item.notice.title if item.notice else "",
+                "yes" if item.is_helpful else "no",
+                item.status,
+                (item.comments or "").replace("\n", " ").strip(),
+                item.created_at.isoformat(),
+            ]
+            for item in queryset
+        ]
+        return _csv_response(
+            "complia_feedback.csv",
+            ["id", "notice_code", "notice_title", "is_helpful", "status", "comments", "created_at"],
+            rows,
+        )
+
+    def _export_notice_qa(self, request):
+        from complia_backend.notices.models import NoticeType
+
+        queryset = NoticeType.objects.all().order_by("code")
+        status_filter = (request.query_params.get("status") or "").strip()
+        if status_filter == "stale":
+            stale_cutoff = timezone.now() - timedelta(days=90)
+            queryset = queryset.filter(verified_at__lt=stale_cutoff)
+        elif status_filter == "unverified":
+            queryset = queryset.filter(verified_at__isnull=True)
+
+        rows = [
+            [
+                str(item.id),
+                item.code,
+                item.title,
+                item.severity,
+                "yes" if item.is_active else "no",
+                item.verified_by or "",
+                item.verified_at.isoformat() if item.verified_at else "",
+                item.updated_at.isoformat(),
+            ]
+            for item in queryset
+        ]
+        return _csv_response(
+            "complia_notice_qa.csv",
+            ["id", "code", "title", "severity", "is_active", "verified_by", "verified_at", "updated_at"],
+            rows,
+        )
+
+    def _export_parser_jobs(self, request):
+        from complia_backend.notices.models import ParserJob
+
+        queryset = ParserJob.objects.select_related("notice", "extraction").all().order_by("-created_at")
+        status_filter = (request.query_params.get("status") or "").strip()
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        rows = []
+        for item in queryset:
+            extraction = getattr(item, "extraction", None)
+            rows.append(
+                [
+                    str(item.id),
+                    item.original_filename,
+                    item.notice.code if item.notice else "",
+                    item.status,
+                    f"{item.confidence:.4f}",
+                    extraction.legal_section if extraction else "",
+                    str(extraction.amount_claimed) if extraction and extraction.amount_claimed is not None else "",
+                    extraction.deadline_date.isoformat() if extraction and extraction.deadline_date else "",
+                    extraction.review_status if extraction else "",
+                    item.created_at.isoformat(),
+                ]
+            )
+
+        return _csv_response(
+            "complia_parser_jobs.csv",
+            [
+                "id",
+                "original_filename",
+                "notice_code",
+                "status",
+                "confidence",
+                "legal_section",
+                "amount_claimed",
+                "deadline_date",
+                "extraction_review_status",
+                "created_at",
+            ],
+            rows,
         )
 
 
