@@ -82,6 +82,12 @@ class NoticeFeedback(models.Model):
 
 
 class SavedNotice(models.Model):
+    ACTION_STATUS_CHOICES = [
+        ("not_started", "Not Started"),
+        ("in_progress", "In Progress"),
+        ("done", "Done"),
+    ]
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -92,7 +98,24 @@ class SavedNotice(models.Model):
         on_delete=models.CASCADE,
         related_name="saved_by_users",
     )
+    parser_job = models.ForeignKey(
+        "notices.ParserJob",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="saved_entries",
+    )
+    parser_snapshot = models.JSONField(default=dict, blank=True)
+    action_status = models.CharField(
+        max_length=20,
+        choices=ACTION_STATUS_CHOICES,
+        default="not_started",
+        db_index=True,
+    )
+    ca_brief = models.TextField(blank=True)
+    next_steps_checklist = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ("user", "notice")

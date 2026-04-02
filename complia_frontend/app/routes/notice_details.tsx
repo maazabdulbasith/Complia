@@ -234,7 +234,7 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
 
   const handleSaveToggle = async () => {
     if (!isLoggedIn) {
-      setSaveError("Sign in to save this notice.");
+      setSaveError("Sign in to save this notice to Safe.");
       return;
     }
 
@@ -253,7 +253,7 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
         trackEvent("notice_saved", { notice_code: notice.code });
       }
     } catch {
-      setSaveError("Could not update saved status. Please retry.");
+      setSaveError("Could not update Safe status. Please retry.");
     } finally {
       setSaveLoading(false);
     }
@@ -390,7 +390,7 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
                     disabled={saveLoading}
                     className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
                   >
-                    {saveLoading ? "Updating..." : savedNoticeId ? "Saved (Remove)" : "Save this notice"}
+                    {saveLoading ? "Updating..." : savedNoticeId ? "Saved in Safe (Remove)" : "Save to Safe"}
                   </button>
                   <Link
                     to={`/ca-help?notice=${encodeURIComponent(notice.code)}`}

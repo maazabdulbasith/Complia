@@ -15,7 +15,13 @@ type PaginatedNoticeResponse = {
 export type SavedNotice = {
   id: number;
   notice: NoticeType;
+  parser_job_id?: number | null;
+  parser_snapshot?: Record<string, unknown>;
+  action_status?: "not_started" | "in_progress" | "done";
+  ca_brief?: string;
+  next_steps_checklist?: string[];
   created_at: string;
+  updated_at?: string;
 };
 
 type PaginatedSavedNoticeResponse = {
@@ -23,6 +29,14 @@ type PaginatedSavedNoticeResponse = {
   next: string | null;
   previous: string | null;
   results: SavedNotice[];
+};
+
+export type SaveNoticePayload = {
+  parser_job_ref?: number;
+  parser_snapshot?: Record<string, unknown>;
+  action_status?: "not_started" | "in_progress" | "done";
+  ca_brief?: string;
+  next_steps_checklist?: string[];
 };
 
 export type CAHelpRequestPayload = {
@@ -550,15 +564,16 @@ export async function getSavedNotices(): Promise<SavedNotice[]> {
   throw new Error("Unexpected saved notice response format");
 }
 
-export async function saveNotice(noticeId: number): Promise<void> {
+export async function saveNotice(noticeId: number, payload?: SaveNoticePayload): Promise<SavedNotice> {
   const response = await fetchWithAuth(`${API_BASE}/saved-notices/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ notice_id: noticeId }),
+    body: JSON.stringify({ notice_id: noticeId, ...(payload || {}) }),
   });
   if (!response.ok) {
     throw new Error(await getApiErrorMessage(response, "Failed to save notice"));
   }
+  return response.json();
 }
 
 export async function removeSavedNotice(savedNoticeId: number): Promise<void> {
@@ -568,6 +583,21 @@ export async function removeSavedNotice(savedNoticeId: number): Promise<void> {
   if (!response.ok) {
     throw new Error(await getApiErrorMessage(response, "Failed to remove saved notice"));
   }
+}
+
+export async function updateSafeEntry(
+  safeEntryId: number,
+  payload: Pick<SaveNoticePayload, "action_status" | "ca_brief" | "next_steps_checklist">
+): Promise<SavedNotice> {
+  const response = await fetchWithAuth(`${API_BASE}/saved-notices/${safeEntryId}/`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Failed to update Safe entry"));
+  }
+  return response.json();
 }
 
 export async function submitCAHelpRequest(payload: CAHelpRequestPayload): Promise<void> {

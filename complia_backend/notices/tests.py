@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
-from .models import NoticeFeedback, NoticeType, ParserBenchmarkRun, ParserJob, TriggerKeyword
+from .models import NoticeFeedback, NoticeType, ParserBenchmarkRun, ParserExtraction, ParserJob, SavedNotice, TriggerKeyword
 from accounts.models import User, UserEntitlement
 
 class NoticeAPITests(APITestCase):
@@ -185,6 +185,77 @@ class NoticeAPITests(APITestCase):
         second = self.client.post(create_url, {"notice_id": self.notice.id}, format="json")
         self.assertEqual(first.status_code, status.HTTP_201_CREATED)
         self.assertEqual(second.status_code, status.HTTP_200_OK)
+
+    def test_save_notice_accepts_safe_metadata(self):
+        self.client.force_authenticate(user=self.user)
+        parser_job = ParserJob.objects.create(
+            user=self.user,
+            notice=self.notice,
+            original_filename="test.txt",
+            mime_type="text/plain",
+            status="completed",
+            confidence=0.82,
+            is_private_beta=True,
+            delete_after=timezone.now() + timedelta(hours=12),
+            processed_at=timezone.now(),
+        )
+        ParserExtraction.objects.create(
+            parser_job=parser_job,
+            deadline_date=timezone.now().date(),
+            legal_section="Section 61",
+            amount_claimed="1200.00",
+            notice_type_detected="Scrutiny of Returns",
+            confidence=0.82,
+            normalized_payload={"source": "unit-test"},
+            raw_text_excerpt="Sample excerpt",
+            review_status="approved",
+        )
+
+        payload = {
+            "notice_id": self.notice.id,
+            "parser_job_ref": parser_job.id,
+            "action_status": "in_progress",
+            "ca_brief": "Call CA and respond before deadline.",
+            "next_steps_checklist": ["Collect returns", "Draft response"],
+        }
+        response = self.client.post(reverse("saved-notice-list"), payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["action_status"], "in_progress")
+        self.assertEqual(response.data["parser_job_id"], parser_job.id)
+        self.assertIn("confidence", response.data["parser_snapshot"])
+
+    def test_save_notice_rejects_foreign_parser_job(self):
+        other_user = User.objects.create_user(email="other@complia.in", password="testpass123")
+        parser_job = ParserJob.objects.create(
+            user=other_user,
+            notice=self.notice,
+            original_filename="foreign.txt",
+            mime_type="text/plain",
+            status="completed",
+            confidence=0.71,
+            is_private_beta=True,
+            delete_after=timezone.now() + timedelta(hours=12),
+            processed_at=timezone.now(),
+        )
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            reverse("saved-notice-list"),
+            {"notice_id": self.notice.id, "parser_job_ref": parser_job.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_saved_notice_patch_updates_action_status(self):
+        self.client.force_authenticate(user=self.user)
+        saved_notice = SavedNotice.objects.create(user=self.user, notice=self.notice)
+        response = self.client.patch(
+            reverse("saved-notice-detail", kwargs={"pk": saved_notice.id}),
+            {"action_status": "done"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        saved_notice.refresh_from_db()
+        self.assertEqual(saved_notice.action_status, "done")
 
     def test_health_check_endpoint(self):
         response = self.client.get(reverse("health-check"))

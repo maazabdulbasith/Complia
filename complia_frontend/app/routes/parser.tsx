@@ -487,25 +487,38 @@ export default function ParserUploadPage() {
 
   const saveDetectedNotice = async (
     noticeId: number,
-    options?: { source?: "auto" | "manual" }
+    options?: {
+      source?: "auto" | "manual";
+      parserJobId?: number;
+      parserSnapshot?: Record<string, unknown>;
+      actionStatus?: "not_started" | "in_progress" | "done";
+      caBrief?: string;
+      nextStepsChecklist?: string[];
+    }
   ): Promise<boolean> => {
     const source = options?.source || "manual";
     setIsSavingNotice(true);
     setSaveNoticeError(null);
     setSaveNoticeMessage(null);
     try {
-      await saveNotice(noticeId);
+      await saveNotice(noticeId, {
+        parser_job_ref: options?.parserJobId,
+        parser_snapshot: options?.parserSnapshot,
+        action_status: options?.actionStatus || "not_started",
+        ca_brief: options?.caBrief,
+        next_steps_checklist: options?.nextStepsChecklist,
+      });
       setSaveNoticeMessage(
         source === "auto"
-          ? "Notice auto-saved to your account."
-          : "Notice saved to your account."
+          ? "Notice auto-saved to Safe."
+          : "Notice saved to Safe."
       );
       return true;
     } catch (error) {
       const fallback =
         source === "auto"
           ? "Parse completed, but auto-save failed. Use the Save button to retry."
-          : "Could not save this notice right now.";
+          : "Could not save this notice to Safe right now.";
       const message = toUserMessage(error, fallback);
       setSaveNoticeError(message);
       return false;
@@ -531,7 +544,41 @@ export default function ParserUploadPage() {
         status: job.status,
       });
       if (job.notice) {
-        void saveDetectedNotice(job.notice, { source: "auto" });
+        const uploadDeadlineLabel = formatDateLabel(job.extraction?.deadline_date || null);
+        const uploadChecklist = buildPersonalizedActionChecklist({
+          noticeTitle: job.notice_code || "detected notice",
+          severity: "medium",
+          daysLeft: null,
+          deadlineLabel: uploadDeadlineLabel,
+          legalSection: job.extraction?.legal_section || "Not detected",
+          amountClaimed: job.extraction?.amount_claimed || "Not detected",
+        });
+        const uploadBrief = [
+          "Complia case handoff",
+          `Detected notice: ${job.notice_code || "Not detected"}`,
+          `Deadline: ${uploadDeadlineLabel}`,
+          `Legal section: ${job.extraction?.legal_section || "Not detected"}`,
+          `Amount claimed: ${job.extraction?.amount_claimed || "Not detected"}`,
+          "",
+          "Recommended next actions:",
+          ...uploadChecklist.map((step, index) => `${index + 1}. ${step}`),
+        ].join("\n");
+        void saveDetectedNotice(job.notice, {
+          source: "auto",
+          parserJobId: job.id,
+          parserSnapshot: {
+            parser_job_id: job.id,
+            notice_code: job.notice_code || "",
+            status: job.status,
+            confidence: job.confidence,
+            deadline_date: job.extraction?.deadline_date || "",
+            legal_section: job.extraction?.legal_section || "",
+            amount_claimed: job.extraction?.amount_claimed || "",
+          },
+          actionStatus: "not_started",
+          caBrief: uploadBrief,
+          nextStepsChecklist: uploadChecklist,
+        });
       }
       void refreshEntitlements();
     } catch (error) {
@@ -739,7 +786,22 @@ export default function ParserUploadPage() {
       setSaveNoticeError("Notice is not detected yet, so it cannot be saved.");
       return;
     }
-    await saveDetectedNotice(parserJob.notice, { source: "manual" });
+    await saveDetectedNotice(parserJob.notice, {
+      source: "manual",
+      parserJobId: parserJob.id,
+      parserSnapshot: {
+        parser_job_id: parserJob.id,
+        notice_code: parserJob.notice_code || "",
+        status: parserJob.status,
+        confidence: parserJob.confidence,
+        deadline_date: parserJob.extraction?.deadline_date || "",
+        legal_section: parserJob.extraction?.legal_section || "",
+        amount_claimed: parserJob.extraction?.amount_claimed || "",
+      },
+      actionStatus: "not_started",
+      caBrief,
+      nextStepsChecklist: actionChecklist,
+    });
   };
 
   const handleCopyBrief = async () => {
@@ -771,7 +833,7 @@ export default function ParserUploadPage() {
             to="/saved"
             className="inline-flex items-center rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 sm:text-sm"
           >
-            Saved notices
+            Safe
           </Link>
         </div>
 
@@ -1010,8 +1072,8 @@ export default function ParserUploadPage() {
                   </div>
                 )}
 
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+                  <p className="text-xs font-semibold uppercase tracking-[0.13em] text-blue-700">
                     Understand this notice
                   </p>
 
@@ -1024,7 +1086,7 @@ export default function ParserUploadPage() {
                   )}
 
                   {!isLoadingNoticeExplain && !noticeExplainError && detectedNotice && (
-                    <div className="mt-3 space-y-3">
+                    <div className="mt-4 space-y-4">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white">
                           {detectedNotice.code}
@@ -1043,36 +1105,36 @@ export default function ParserUploadPage() {
                       </div>
 
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">{detectedNotice.title}</p>
-                        <p className="mt-1 text-sm leading-6 text-slate-700">{detectedNotice.summary}</p>
+                        <p className="text-lg font-bold text-slate-900">{detectedNotice.title}</p>
+                        <p className="mt-1 text-base leading-7 text-slate-700">{detectedNotice.summary}</p>
                       </div>
 
                       {detectedNotice.why_received && (
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-blue-700">
                             Why you likely got this
                           </p>
-                          <p className="mt-1 text-sm leading-6 text-slate-700">{detectedNotice.why_received}</p>
+                          <p className="mt-1 text-[15px] leading-7 text-slate-700">{detectedNotice.why_received}</p>
                         </div>
                       )}
 
                       {detectedNotice.consequences_of_ignoring && (
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-rose-700">
                             If you ignore this
                           </p>
-                          <p className="mt-1 text-sm leading-6 text-slate-700">
+                          <p className="mt-1 text-[15px] leading-7 text-rose-900">
                             {detectedNotice.consequences_of_ignoring}
                           </p>
                         </div>
                       )}
 
                       {detectedNotice.next_steps && (
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-blue-700">
                             What to do next
                           </p>
-                          <p className="mt-1 whitespace-pre-line text-sm leading-6 text-slate-700">
+                          <p className="mt-1 whitespace-pre-line text-[15px] leading-7 text-blue-900">
                             {detectedNotice.next_steps}
                           </p>
                         </div>
@@ -1087,15 +1149,23 @@ export default function ParserUploadPage() {
                     </p>
                   )}
 
-                  <div className="mt-4 border-t border-slate-200 pt-4">
+                  <div className="mt-5 border-t border-slate-200 pt-4">
+                    <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => void handleSaveNotice()}
                       disabled={isSavingNotice || !parserJob.notice}
                       className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {isSavingNotice ? "Saving..." : "Save notice to account"}
+                      {isSavingNotice ? "Saving..." : "Save to Safe"}
                     </button>
+                    <Link
+                      to={`/ca-help?notice=${encodeURIComponent(parserJob.notice_code || noticeCode || "")}`}
+                      className="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+                    >
+                      Talk to a CA
+                    </Link>
+                    </div>
                     {!parserJob.notice && (
                       <p className="mt-2 text-xs text-slate-500">
                         Save becomes available after notice detection.
@@ -1237,6 +1307,12 @@ export default function ParserUploadPage() {
                 <li>2. Complete secure Cashfree checkout.</li>
                 <li>3. Result unlocks with extracted fields, risk checklist, and CA handoff brief.</li>
               </ol>
+              <Link
+                to={`/ca-help?notice=${encodeURIComponent(parserJob?.notice_code || noticeCode || "")}`}
+                className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+              >
+                Talk to a CA
+              </Link>
             </section>
           </aside>
         </section>

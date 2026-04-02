@@ -123,10 +123,47 @@ class SavedNoticeSerializer(serializers.ModelSerializer):
         source="notice",
         write_only=True,
     )
+    parser_job_id = serializers.IntegerField(source="parser_job.id", read_only=True)
+    parser_job_ref = serializers.PrimaryKeyRelatedField(
+        queryset=ParserJob.objects.all(),
+        source="parser_job",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = SavedNotice
-        fields = ["id", "notice", "notice_id", "created_at"]
+        fields = [
+            "id",
+            "notice",
+            "notice_id",
+            "parser_job_id",
+            "parser_job_ref",
+            "parser_snapshot",
+            "action_status",
+            "ca_brief",
+            "next_steps_checklist",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "notice", "parser_job_id", "created_at", "updated_at"]
+
+    def validate_next_steps_checklist(self, value):
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Checklist must be an array of action items.")
+        cleaned: list[str] = []
+        for item in value:
+            text = str(item).strip()
+            if not text:
+                continue
+            cleaned.append(text[:240])
+        return cleaned
+
+    def validate_ca_brief(self, value):
+        return (value or "").strip()
 
 
 class ParserUploadSerializer(serializers.Serializer):

@@ -123,7 +123,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   to="/saved"
                   className="rounded-xl border border-slate-300/80 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 sm:hidden"
                 >
-                  Saved
+                  Safe
                 </Link>
                 {user.user_type === "admin" && (
                   <Link
@@ -137,7 +137,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   to="/saved"
                   className="hidden rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 sm:inline-flex"
                 >
-                  Saved
+                  Safe
                 </Link>
                 <span className="hidden text-xs font-medium text-slate-600 sm:inline">{user.email}</span>
                 <button

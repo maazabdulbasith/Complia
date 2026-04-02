@@ -88,10 +88,10 @@ export default function LoginPage() {
             Secure access
           </p>
           <h1 className="font-display mt-4 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl md:text-5xl">
-            Access your saved notices and advisor workflows.
+            Access your Safe workspace and advisor workflows.
           </h1>
           <p className="mt-4 max-w-md text-base leading-7 text-slate-600">
-            Sign in once and continue across search, saved cases, and CA request tracking.
+            Sign in once and continue across search, Safe cases, and CA request tracking.
           </p>
         </section>
 

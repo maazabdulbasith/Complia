@@ -6,7 +6,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
-from rest_framework import filters, generics, mixins, permissions, status, viewsets
+from rest_framework import filters, generics, mixins, permissions, serializers, status, viewsets
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle, UserRateThrottle
@@ -72,6 +72,7 @@ class FeedbackViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
 class SavedNoticeViewSet(
     mixins.ListModelMixin,
     mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
     mixins.DestroyModelMixin,
     viewsets.GenericViewSet,
 ):
@@ -84,7 +85,47 @@ class SavedNoticeViewSet(
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return SavedNotice.objects.filter(user=self.request.user).select_related("notice")
+        return SavedNotice.objects.filter(user=self.request.user).select_related("notice", "parser_job")
+
+    @staticmethod
+    def _build_parser_snapshot(parser_job: ParserJob) -> dict:
+        extraction = getattr(parser_job, "extraction", None)
+        if not extraction:
+            return {}
+        return {
+            "parser_job_id": parser_job.id,
+            "notice_code": parser_job.notice.code if parser_job.notice else "",
+            "status": parser_job.status,
+            "confidence": parser_job.confidence,
+            "deadline_date": extraction.deadline_date.isoformat() if extraction.deadline_date else "",
+            "legal_section": extraction.legal_section or "",
+            "amount_claimed": str(extraction.amount_claimed) if extraction.amount_claimed is not None else "",
+            "raw_text_excerpt": extraction.raw_text_excerpt or "",
+        }
+
+    def _apply_safe_fields(self, saved_notice: SavedNotice, validated_data: dict, user) -> None:
+        parser_job = validated_data.get("parser_job")
+        if parser_job:
+            if parser_job.user_id != user.id:
+                raise serializers.ValidationError({"parser_job_ref": ["Parser result does not belong to this user."]})
+            saved_notice.parser_job = parser_job
+
+        parser_snapshot = validated_data.get("parser_snapshot")
+        if parser_snapshot is not None:
+            saved_notice.parser_snapshot = parser_snapshot
+        elif parser_job:
+            saved_notice.parser_snapshot = self._build_parser_snapshot(parser_job)
+
+        action_status = validated_data.get("action_status")
+        if action_status:
+            saved_notice.action_status = action_status
+
+        if "ca_brief" in validated_data:
+            saved_notice.ca_brief = validated_data.get("ca_brief") or ""
+
+        checklist = validated_data.get("next_steps_checklist")
+        if checklist is not None:
+            saved_notice.next_steps_checklist = checklist
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -93,14 +134,26 @@ class SavedNoticeViewSet(
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         notice = serializer.validated_data["notice"]
-
+        validated_data = serializer.validated_data
         saved_notice, created = SavedNotice.objects.get_or_create(
             user=request.user,
             notice=notice,
         )
+        self._apply_safe_fields(saved_notice, validated_data, request.user)
+        saved_notice.save()
         output_serializer = self.get_serializer(saved_notice)
         response_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return Response(output_serializer.data, status=response_status)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
+
+    def perform_update(self, serializer):
+        saved_notice = serializer.instance
+        validated_data = serializer.validated_data
+        self._apply_safe_fields(saved_notice, validated_data, self.request.user)
+        saved_notice.save()
 
 
 class SuperAdminFeedbackViewSet(
