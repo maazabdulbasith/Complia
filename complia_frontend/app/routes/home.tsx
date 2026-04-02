@@ -4,12 +4,22 @@ import { Form, Link, useNavigation, useNavigate } from "react-router";
 import { searchNotices } from "../api/client";
 import { trackEvent } from "../lib/analytics";
 import BrandMark from "../lib/brand_mark";
+import { FEATURED_NOTICE_LINKS, SEO_FAQS, SITE_DESCRIPTION, SITE_NAME } from "../lib/seo";
 import type { Route } from "./+types/home";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Complia | Tax Notice Intelligence" },
-    { name: "description", content: "Understand GST and Income Tax notices in plain English." },
+    { title: "Complia | Understand GST and Income Tax Notices Fast" },
+    { name: "description", content: SITE_DESCRIPTION },
+    { property: "og:title", content: "Complia | Understand GST and Income Tax Notices Fast" },
+    { property: "og:description", content: SITE_DESCRIPTION },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary_large_image" },
+    {
+      name: "twitter:title",
+      content: "Complia | Understand GST and Income Tax Notices Fast",
+    },
+    { name: "twitter:description", content: SITE_DESCRIPTION },
   ];
 }
 
@@ -85,15 +95,55 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     navigate("/");
   };
 
+  const siteUrl = (import.meta.env.VITE_SITE_URL as string | undefined)?.replace(/\/$/, "") || "https://complia.in";
+  const homeSchema = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${siteUrl}/#organization`,
+        name: SITE_NAME,
+        url: siteUrl,
+        logo: `${siteUrl}/brand/complia-logo-icon.png`,
+        contactPoint: [
+          {
+            "@type": "ContactPoint",
+            contactType: "customer support",
+            email: "admin@complia.in",
+            areaServed: "IN",
+            availableLanguage: ["en"],
+          },
+        ],
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${siteUrl}/#website`,
+        url: siteUrl,
+        name: SITE_NAME,
+        description: SITE_DESCRIPTION,
+        publisher: { "@id": `${siteUrl}/#organization` },
+        potentialAction: {
+          "@type": "SearchAction",
+          target: `${siteUrl}/?q={search_term_string}`,
+          "query-input": "required name=search_term_string",
+        },
+      },
+    ],
+  };
+
   return (
     <div className="grid-aurora relative min-h-screen overflow-x-hidden text-slate-900">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(homeSchema) }}
+      />
       <div className="noise-layer pointer-events-none absolute inset-0 opacity-30" />
       <div className="pointer-events-none absolute -top-32 -right-20 h-96 w-96 rounded-full bg-sky-300/25 blur-3xl animate-float" />
       <div className="pointer-events-none absolute top-56 -left-24 h-80 w-80 rounded-full bg-blue-300/25 blur-3xl animate-float [animation-delay:1200ms]" />
 
       <header className="sticky top-0 z-40 border-b border-white/60 bg-white/75 backdrop-blur-xl">
         <div className="mx-auto flex min-h-16 w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:h-18 sm:flex-nowrap sm:gap-0 sm:px-5 sm:py-0">
-          <BrandMark to="/" imageClassName="h-9 sm:h-10 w-auto" showTagline />
+          <BrandMark to="/" imageClassName="h-9 w-9 sm:h-10 sm:w-10" showTagline />
 
           <div className="flex items-center gap-2">
             <Link
@@ -181,6 +231,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 className="inline-flex items-center justify-center rounded-2xl border border-slate-300/80 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 sm:px-5 sm:py-3"
               >
                 Talk to a CA
+              </Link>
+              <Link
+                to="/faq"
+                className="inline-flex items-center justify-center rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-2.5 text-sm font-semibold text-cyan-700 transition hover:bg-cyan-100 sm:px-5 sm:py-3"
+              >
+                Browse FAQ
               </Link>
             </div>
           </div>
@@ -287,9 +343,72 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           ) : null}
         </section>
 
+        <section className="mt-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-[28px] border border-slate-200/80 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.08)] sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Popular notice pages
+                </p>
+                <h2 className="font-display mt-2 text-2xl font-bold tracking-tight text-slate-950">
+                  High-intent notices users search most often
+                </h2>
+              </div>
+              <Link to="/faq" className="text-sm font-semibold text-blue-700 hover:text-blue-800">
+                FAQ and search help
+              </Link>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {FEATURED_NOTICE_LINKS.map((item) => (
+                <Link
+                  key={item.code}
+                  to={`/notice/${item.code}`}
+                  className="group rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 transition hover:border-blue-200 hover:bg-blue-50"
+                >
+                  <p className="font-mono text-xs font-semibold text-slate-500">{item.code}</p>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-900 transition group-hover:text-blue-700">
+                    {item.label}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border border-slate-200/80 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.08)] sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Frequently asked
+                </p>
+                <h2 className="font-display mt-2 text-2xl font-bold tracking-tight text-slate-950">
+                  Questions people ask before taking action
+                </h2>
+              </div>
+            </div>
+            <div className="mt-5 space-y-3">
+              {SEO_FAQS.slice(0, 4).map((item) => (
+                <article key={item.question} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <h3 className="text-sm font-semibold text-slate-950">{item.question}</h3>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">{item.answer}</p>
+                </article>
+              ))}
+            </div>
+            <Link
+              to="/faq"
+              className="mt-5 inline-flex items-center rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+            >
+              View all FAQs
+            </Link>
+          </div>
+        </section>
+
         <footer className="mt-12 border-t border-slate-200/80 pt-5 text-xs text-slate-500 sm:mt-14 sm:pt-6">
           <div className="flex flex-wrap items-center gap-2">
             <span>Legal:</span>
+            <Link to="/faq" className="font-semibold text-slate-600 hover:text-blue-700">
+              FAQ
+            </Link>
+            <span>·</span>
             <Link to="/contact-us" className="font-semibold text-slate-600 hover:text-blue-700">
               Contact Us
             </Link>

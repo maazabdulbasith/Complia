@@ -32,9 +32,20 @@ def robots_txt(request):
 
 def sitemap_xml(request):
     base_url = _base_url(request)
+    public_routes = [
+        "/",
+        "/faq",
+        "/parser",
+        "/ca-help",
+        "/contact-us",
+        "/terms-and-conditions",
+        "/privacy-policy",
+        "/refund-policy",
+        "/cancellation-policy",
+    ]
     urls = [
-        {"loc": f"{base_url}/", "lastmod": timezone.now().date().isoformat()},
-        {"loc": f"{base_url}/ca-help", "lastmod": timezone.now().date().isoformat()},
+        {"loc": f"{base_url}{route}", "lastmod": timezone.now().date().isoformat()}
+        for route in public_routes
     ]
 
     for notice in NoticeType.objects.filter(is_active=True).only("code", "updated_at"):

@@ -5,6 +5,14 @@ import { getSavedNotices, updateSafeEntry } from "../api/client";
 import type { SavedNotice } from "../api/client";
 import BrandMark from "../lib/brand_mark";
 import { trackEvent } from "../lib/analytics";
+import type { Route } from "./+types/saved_notices";
+
+export function meta({}: Route.MetaArgs) {
+  return [
+    { title: "Complia | Safe" },
+    { name: "robots", content: "noindex, nofollow" },
+  ];
+}
 
 function severityTone(severity: "low" | "medium" | "high") {
   if (severity === "high") {

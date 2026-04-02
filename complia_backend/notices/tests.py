@@ -270,6 +270,7 @@ class NoticeAPITests(APITestCase):
         self.assertEqual(sitemap.status_code, status.HTTP_200_OK)
         self.assertIn("Sitemap:", robots.content.decode())
         self.assertIn("<urlset", sitemap.content.decode())
+        self.assertIn("/faq", sitemap.content.decode())
 
     def test_readiness_check_endpoint(self):
         response = self.client.get(reverse("readiness-check"))

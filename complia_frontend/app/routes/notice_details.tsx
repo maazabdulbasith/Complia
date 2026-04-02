@@ -36,6 +36,11 @@ export function meta({ data }: Route.MetaArgs) {
     { property: "og:title", content: notice.meta_title || `${notice.code} - ${notice.title}` },
     { property: "og:description", content: notice.meta_description || notice.summary },
     { property: "og:type", content: "article" },
+    { property: "og:url", content: `https://complia.in/notice/${notice.code}` },
+    { property: "article:modified_time", content: notice.updated_at },
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "twitter:title", content: notice.meta_title || `${notice.code} - ${notice.title}` },
+    { name: "twitter:description", content: notice.meta_description || notice.summary },
   ];
 }
 
@@ -90,16 +95,51 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
   const showAssistedOffer = Boolean(assistedOfferConfig?.enabled && assistedOfferConfig.offer && offerAllowedForSeverity);
 
   const tone = severityMeta(notice.severity);
+  const siteUrl = (import.meta.env.VITE_SITE_URL as string | undefined)?.replace(/\/$/, "") || "https://complia.in";
   const noticeSchema = {
     "@context": "https://schema.org",
     "@type": "Article",
+    "@id": `${siteUrl}/notice/${notice.code}#article`,
     headline: notice.title,
     description: notice.summary,
     dateModified: notice.updated_at,
+    mainEntityOfPage: `${siteUrl}/notice/${notice.code}`,
     author: {
       "@type": "Organization",
       name: "Complia",
     },
+    publisher: {
+      "@type": "Organization",
+      name: "Complia",
+      logo: {
+        "@type": "ImageObject",
+        url: `${siteUrl}/brand/complia-logo-icon.png`,
+      },
+    },
+  };
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: `${siteUrl}/`,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Notices",
+        item: `${siteUrl}/`,
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: notice.code,
+        item: `${siteUrl}/notice/${notice.code}`,
+      },
+    ],
   };
 
   useEffect(() => {
@@ -309,9 +349,13 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(noticeSchema) }}
       />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
       <div className="mx-auto w-full max-w-6xl px-4 pb-16 pt-6 sm:px-5 sm:pt-8 md:pt-10">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <BrandMark to="/" imageClassName="h-9 w-auto" />
+          <BrandMark to="/" imageClassName="h-9 w-9" />
           <Link
             to="/"
             className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 sm:px-4"

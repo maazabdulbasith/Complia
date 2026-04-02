@@ -35,6 +35,14 @@ import type {
 } from "../api/client";
 import BrandMark from "../lib/brand_mark";
 import { trackEvent } from "../lib/analytics";
+import type { Route } from "./+types/superadmin";
+
+export function meta({}: Route.MetaArgs) {
+  return [
+    { title: "Complia | SuperAdmin" },
+    { name: "robots", content: "noindex, nofollow" },
+  ];
+}
 
 function StatCard({ label, value, accent }: { label: string; value: string | number; accent: string }) {
   return (

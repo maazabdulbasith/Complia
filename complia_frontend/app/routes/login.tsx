@@ -5,9 +5,17 @@ import { jwtDecode } from "jwt-decode";
 
 import { trackEvent } from "../lib/analytics";
 import BrandMark from "../lib/brand_mark";
+import type { Route } from "./+types/login";
 
 const API_BASE_RAW = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api/v1";
 const API_BASE = API_BASE_RAW.endsWith("/api/v1") ? API_BASE_RAW : `${API_BASE_RAW}/api/v1`;
+
+export function meta({}: Route.MetaArgs) {
+  return [
+    { title: "Complia | Sign In" },
+    { name: "robots", content: "noindex, nofollow" },
+  ];
+}
 
 export default function LoginPage() {
   const navigate = useNavigate();
