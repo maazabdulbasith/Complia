@@ -33,6 +33,7 @@ import type {
   ParserJob,
   ParserBenchmarkRun,
 } from "../api/client";
+import BrandMark from "../lib/brand_mark";
 import { trackEvent } from "../lib/analytics";
 
 function StatCard({ label, value, accent }: { label: string; value: string | number; accent: string }) {
@@ -322,6 +323,7 @@ export default function SuperAdminDashboard() {
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
         <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
+            <BrandMark to="/" imageClassName="h-9 w-auto" />
             <p className="text-xs uppercase tracking-[0.2em] text-indigo-500 font-bold">Complia Operations</p>
             <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">SuperAdmin Command Center</h1>
             <p className="text-slate-600 mt-2">Complete in-app operations inbox. No Django admin required.</p>

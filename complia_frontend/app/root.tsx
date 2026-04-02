@@ -12,6 +12,8 @@ import "./app.css";
 import { trackEvent } from "./lib/analytics";
 
 export const links: Route.LinksFunction = () => [
+  { rel: "icon", href: "/brand/complia-logo.png", type: "image/png" },
+  { rel: "apple-touch-icon", href: "/brand/complia-logo.png" },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",

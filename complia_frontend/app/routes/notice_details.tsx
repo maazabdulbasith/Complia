@@ -13,6 +13,7 @@ import {
   submitFeedback,
   type AssistedOfferConfig,
 } from "../api/client";
+import BrandMark from "../lib/brand_mark";
 import { getAnalyticsSessionId, trackEvent } from "../lib/analytics";
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
@@ -310,6 +311,7 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
       />
       <div className="mx-auto w-full max-w-6xl px-4 pb-16 pt-6 sm:px-5 sm:pt-8 md:pt-10">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <BrandMark to="/" imageClassName="h-9 w-auto" />
           <Link
             to="/"
             className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 sm:px-4"

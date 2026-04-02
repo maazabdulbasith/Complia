@@ -15,6 +15,7 @@ import {
   type PaymentPlan,
   type UserEntitlements,
 } from "../api/client";
+import BrandMark from "../lib/brand_mark";
 import { trackEvent } from "../lib/analytics";
 import type { NoticeType } from "../types/notice";
 import type { Route } from "./+types/parser";
@@ -823,6 +824,7 @@ export default function ParserUploadPage() {
 
       <main className="relative z-10 mx-auto w-full max-w-6xl">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <BrandMark to="/" imageClassName="h-9 w-auto" />
           <Link
             to="/"
             className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"

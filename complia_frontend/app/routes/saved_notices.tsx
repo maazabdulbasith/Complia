@@ -1,8 +1,9 @@
-import { Link } from "react-router";
+﻿import { Link } from "react-router";
 import { useCallback, useEffect, useState } from "react";
 
 import { getSavedNotices, updateSafeEntry } from "../api/client";
 import type { SavedNotice } from "../api/client";
+import BrandMark from "../lib/brand_mark";
 import { trackEvent } from "../lib/analytics";
 
 function severityTone(severity: "low" | "medium" | "high") {
@@ -77,6 +78,7 @@ export default function SavedNoticesPage() {
   const [error, setError] = useState<string | null>(null);
   const [authRequired, setAuthRequired] = useState(false);
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [copyMessageId, setCopyMessageId] = useState<number | null>(null);
 
   const loadSafeItems = useCallback(async () => {
     setLoading(true);
@@ -117,10 +119,28 @@ export default function SavedNoticesPage() {
     }
   };
 
+  const copyCABrief = async (safeId: number, text: string) => {
+    if (!text.trim()) {
+      setError("No CA brief available to copy for this entry.");
+      return;
+    }
+    try {
+      if (!navigator.clipboard) {
+        throw new Error("Clipboard unavailable");
+      }
+      await navigator.clipboard.writeText(text);
+      setCopyMessageId(safeId);
+      window.setTimeout(() => setCopyMessageId((current) => (current === safeId ? null : current)), 1800);
+    } catch {
+      setError("Could not copy CA brief. Please copy it manually.");
+    }
+  };
+
   return (
     <div className="grid-aurora min-h-screen overflow-x-hidden px-4 py-6 text-slate-900 sm:px-5 sm:py-8">
       <main className="mx-auto w-full max-w-5xl">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+          <BrandMark to="/" imageClassName="h-9 w-auto" />
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">My workspace</p>
             <h1 className="font-display mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Safe</h1>
@@ -247,10 +267,22 @@ export default function SavedNoticesPage() {
                   </div>
 
                   <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-700">CA brief</p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-700">CA brief</p>
+                      <button
+                        type="button"
+                        onClick={() => void copyCABrief(item.id, caBrief)}
+                        className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+                      >
+                        Copy CA brief
+                      </button>
+                    </div>
                     <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-blue-900">
-                      {caBrief ? `${caBrief.slice(0, 260)}${caBrief.length > 260 ? "..." : ""}` : "No CA brief saved yet."}
+                      {caBrief || "No CA brief saved yet."}
                     </p>
+                    {copyMessageId === item.id && (
+                      <p className="mt-2 text-xs font-semibold text-emerald-700">Copied.</p>
+                    )}
                   </div>
 
                   <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -287,7 +319,7 @@ export default function SavedNoticesPage() {
                   </div>
 
                   <p className="mt-3 text-xs text-slate-500">
-                    Added on {new Date(item.created_at).toLocaleDateString()} � Updated {new Date(item.updated_at || item.created_at).toLocaleDateString()}
+                    Added on {new Date(item.created_at).toLocaleDateString()} · Updated {new Date(item.updated_at || item.created_at).toLocaleDateString()}
                   </p>
                 </div>
               );

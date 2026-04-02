@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router";
 
 import { submitCAHelpRequest } from "../api/client";
 import { trackEvent } from "../lib/analytics";
+import BrandMark from "../lib/brand_mark";
 import type { Route } from "./+types/ca_help";
 
 export function meta({}: Route.MetaArgs) {
@@ -83,6 +84,7 @@ export default function CAHelpPage() {
     <div className="grid-aurora min-h-screen overflow-x-hidden px-4 py-6 text-slate-900 sm:px-5 sm:py-8">
       <main className="mx-auto w-full max-w-3xl">
         <div className="mb-7 flex flex-wrap items-center justify-between gap-3">
+          <BrandMark to="/" imageClassName="h-9 w-auto" />
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">CA support</p>
             <h1 className="font-display mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Request professional help</h1>

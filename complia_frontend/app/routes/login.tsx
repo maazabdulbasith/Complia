@@ -4,6 +4,7 @@ import { useState } from "react";
 import { jwtDecode } from "jwt-decode";
 
 import { trackEvent } from "../lib/analytics";
+import BrandMark from "../lib/brand_mark";
 
 const API_BASE_RAW = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api/v1";
 const API_BASE = API_BASE_RAW.endsWith("/api/v1") ? API_BASE_RAW : `${API_BASE_RAW}/api/v1`;
@@ -81,6 +82,7 @@ export default function LoginPage() {
 
       <main className="relative z-10 mx-auto flex w-full max-w-5xl flex-col gap-6 sm:gap-8 md:flex-row md:items-center">
         <section className="md:w-1/2">
+          <BrandMark to="/" imageClassName="h-9 sm:h-10 w-auto" />
           <Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-700">
             <span aria-hidden>&larr;</span> Back to search
           </Link>

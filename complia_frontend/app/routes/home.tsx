@@ -3,6 +3,7 @@ import { Form, Link, useNavigation, useNavigate } from "react-router";
 
 import { searchNotices } from "../api/client";
 import { trackEvent } from "../lib/analytics";
+import BrandMark from "../lib/brand_mark";
 import type { Route } from "./+types/home";
 
 export function meta({}: Route.MetaArgs) {
@@ -92,15 +93,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
       <header className="sticky top-0 z-40 border-b border-white/60 bg-white/75 backdrop-blur-xl">
         <div className="mx-auto flex min-h-16 w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:h-18 sm:flex-nowrap sm:gap-0 sm:px-5 sm:py-0">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 text-sm font-bold text-white shadow-lg shadow-blue-600/25">
-              C
-            </div>
-            <div>
-              <p className="font-display text-lg font-bold tracking-tight">Complia</p>
-              <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500 sm:text-[11px] sm:tracking-[0.18em]">Notice intelligence</p>
-            </div>
-          </Link>
+          <BrandMark to="/" imageClassName="h-9 sm:h-10 w-auto" showTagline />
 
           <div className="flex items-center gap-2">
             <Link
