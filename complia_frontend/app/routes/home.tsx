@@ -103,6 +103,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </Link>
 
           <div className="flex items-center gap-2">
+            <Link
+              to="/contact-us"
+              className="hidden rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 sm:inline-flex"
+            >
+              Contact Us
+            </Link>
             {user ? (
               <>
                 {user.user_type === "admin" && (
@@ -272,6 +278,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <footer className="mt-12 border-t border-slate-200/80 pt-5 text-xs text-slate-500 sm:mt-14 sm:pt-6">
           <div className="flex flex-wrap items-center gap-2">
             <span>Legal:</span>
+            <Link to="/contact-us" className="font-semibold text-slate-600 hover:text-blue-700">
+              Contact Us
+            </Link>
+            <span>·</span>
             <Link to="/terms-and-conditions" className="font-semibold text-slate-600 hover:text-blue-700">
               Terms & Conditions
             </Link>

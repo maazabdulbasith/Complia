@@ -121,6 +121,10 @@ export default function LoginPage() {
               By signing in, you agree to Complia terms and privacy policy.
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+              <Link to="/contact-us" className="font-semibold text-slate-600 hover:text-blue-700">
+                Contact
+              </Link>
+              <span>·</span>
               <Link to="/terms-and-conditions" className="font-semibold text-slate-600 hover:text-blue-700">
                 Terms
               </Link>

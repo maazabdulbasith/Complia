@@ -5,6 +5,7 @@ export default [
     route("login", "routes/login.tsx"),
     route("terms-and-conditions", "routes/terms_and_conditions.tsx"),
     route("privacy-policy", "routes/privacy_policy.tsx"),
+    route("contact-us", "routes/contact_us.tsx"),
     route("refund-policy", "routes/refund_policy.tsx"),
     route("cancellation-policy", "routes/cancellation_policy.tsx"),
     route("superadmin", "routes/superadmin.tsx"),
