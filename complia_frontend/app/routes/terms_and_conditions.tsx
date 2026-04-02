@@ -123,6 +123,10 @@ export default function TermsAndConditionsPage() {
           <Link to="/cancellation-policy" className="font-semibold text-blue-700 hover:underline">
             Cancellation Policy
           </Link>
+          , and{" "}
+          <Link to="/contact-us" className="font-semibold text-blue-700 hover:underline">
+            Contact Us
+          </Link>
           .
         </div>
       </main>

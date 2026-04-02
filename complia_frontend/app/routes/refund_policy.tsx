@@ -84,6 +84,10 @@ export default function RefundPolicyPage() {
 
         <div className="mt-8 border-t border-slate-200 pt-5 text-sm text-slate-600">
           Read related pages:{" "}
+          <Link to="/contact-us" className="font-semibold text-blue-700 hover:underline">
+            Contact Us
+          </Link>
+          ,{" "}
           <Link to="/cancellation-policy" className="font-semibold text-blue-700 hover:underline">
             Cancellation Policy
           </Link>
