@@ -15,6 +15,7 @@ from rest_framework.views import APIView
 from accounts.models import AnalyticsEvent, UserEntitlement
 from accounts.permissions import IsParserBetaUser, IsSuperAdmin
 from .models import NoticeFeedback, NoticeType, ParserBenchmarkRun, ParserExtraction, ParserJob, SavedNotice
+from .ocr_utils import OCRProcessingError, extract_text_from_binary_document, sanitize_ocr_text
 from .parser_utils import parse_notice_document
 from .serializers import (
     AdminFeedbackSerializer,
@@ -229,18 +230,28 @@ class ParserUploadView(APIView):
                 raw_bytes = temp_file.read()
 
             mime_type = (getattr(upload, "content_type", "") or "").lower()
-            is_binary_doc = mime_type.startswith("image/") or mime_type == "application/pdf"
+            file_name = (upload.name or "").lower()
+            is_binary_doc = mime_type.startswith("image/") or mime_type == "application/pdf" or file_name.endswith(".pdf")
+            ocr_metadata = {
+                "ocr_engine": "none",
+                "ocr_pages_processed": 0,
+                "ocr_used": False,
+                "ocr_text_chars": 0,
+            }
             if is_binary_doc:
-                raise ValueError(
-                    "Image/PDF parsing is not enabled yet. Please upload a text (.txt) notice for parser beta."
+                raw_text, ocr_metadata = extract_text_from_binary_document(
+                    raw_bytes=raw_bytes,
+                    mime_type=mime_type,
+                    filename=upload.name,
                 )
-
-            raw_text = raw_bytes[:15000].decode("utf-8", errors="ignore")
-            # Binary uploads (image/pdf) may decode with NUL characters, which
-            # PostgreSQL text fields reject. Strip them before persistence/parsing.
-            raw_text = raw_text.replace("\x00", " ")
+            else:
+                raw_text = raw_bytes[:60000].decode("utf-8", errors="ignore")
+                raw_text = sanitize_ocr_text(raw_text)
+                ocr_metadata["ocr_text_chars"] = len("".join(ch for ch in raw_text if not ch.isspace()))
             if not self._looks_like_readable_text(raw_text):
-                raise ValueError("Could not extract readable text from this file. Please upload a clearer text document.")
+                raise ValueError(
+                    "Could not extract readable text from this file. Please upload a clearer scan or .txt file."
+                )
             notice_code = serializer.validated_data.get("notice_code", "").strip()
             parsed = parse_notice_document(raw_text, upload.name, notice_code)
             deadline_date = parsed["deadline_date"]
@@ -269,6 +280,10 @@ class ParserUploadView(APIView):
                 "legal_section": legal_section,
                 "amount_claimed": str(amount_claimed) if amount_claimed is not None else "",
                 "confidence": confidence,
+                "ocr_engine": ocr_metadata["ocr_engine"],
+                "ocr_pages_processed": ocr_metadata["ocr_pages_processed"],
+                "ocr_used": ocr_metadata["ocr_used"],
+                "ocr_text_chars": ocr_metadata["ocr_text_chars"],
             }
 
             ParserExtraction.objects.create(
@@ -314,7 +329,7 @@ class ParserUploadView(APIView):
                             "updated_at",
                         ]
                     )
-            if isinstance(exc, ValueError):
+            if isinstance(exc, (ValueError, OCRProcessingError)):
                 return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
             raise
         finally:

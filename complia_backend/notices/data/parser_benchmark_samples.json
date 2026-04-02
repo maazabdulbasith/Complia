@@ -138,5 +138,61 @@
     "expected_notice_code": "",
     "expected_legal_section": "",
     "expected_amount": null
+  },
+  {
+    "filename": "ocr-asmt10-phone-photo.txt",
+    "text": "GST ASMT - 10 [See rule 99(1)] section under which notice is issued: 61 Date by which reply has to be submitted: 23/12/2024",
+    "expected_notice_code": "GST-ASMT-10",
+    "expected_legal_section": "Section 61",
+    "expected_amount": null
+  },
+  {
+    "filename": "ocr-drc01-scan-noisy.txt",
+    "text": "Show Cause notice GST-DRC-01 u/s 74. Demand amount INR 245000 payable within 30 days.",
+    "expected_notice_code": "GST-DRC-01",
+    "expected_legal_section": "Section 74",
+    "expected_amount": "245000"
+  },
+  {
+    "filename": "ocr-it156-demand-slip.txt",
+    "text": "Notice of Demand IT-156 under Section 156. Tax due Rs 82,500.",
+    "expected_notice_code": "IT-156",
+    "expected_legal_section": "Section 156",
+    "expected_amount": "82500"
+  },
+  {
+    "filename": "ocr-it245-adjustment-mail.txt",
+    "text": "Intimation u/s 245 for refund adjustment against outstanding demand.",
+    "expected_notice_code": "IT-245",
+    "expected_legal_section": "Section 245",
+    "expected_amount": null
+  },
+  {
+    "filename": "ocr-gstr3a-camera-capture.txt",
+    "text": "GSTR-3A return defaulter notice under Section 46 for non filing.",
+    "expected_notice_code": "GSTR-3A",
+    "expected_legal_section": "Section 46",
+    "expected_amount": null
+  },
+  {
+    "filename": "ocr-reg17-skewed-scan.txt",
+    "text": "GST-REG-17 show cause for cancellation under Section 29. Reply by 10/04/2026.",
+    "expected_notice_code": "GST-REG-17",
+    "expected_legal_section": "Section 29",
+    "expected_amount": null
+  },
+  {
+    "filename": "ocr-summons70-copy.txt",
+    "text": "Summons GST under Section 70 to appear and produce records.",
+    "expected_notice_code": "GST-SUMMONS",
+    "expected_legal_section": "Section 70",
+    "expected_amount": null
+  },
+  {
+    "filename": "ocr-drc07-summary-order.txt",
+    "text": "Final summary order GST-DRC-07 under Section 73. INR 198750 is payable immediately.",
+    "expected_notice_code": "GST-DRC-07",
+    "expected_legal_section": "Section 73",
+    "expected_amount": "198750"
   }
 ]

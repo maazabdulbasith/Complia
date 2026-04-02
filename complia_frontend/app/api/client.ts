@@ -346,6 +346,13 @@ function deriveMessageFromEnvelope(envelope: ApiErrorEnvelope | null, fallback: 
   if (!envelope) {
     return fallback;
   }
+  const normalizedDetail = (envelope.detail || envelope.message || "").toLowerCase();
+  if (
+    normalizedDetail.includes("given token not valid for any token type") ||
+    normalizedDetail.includes("token_not_valid")
+  ) {
+    return "Your session expired. Please sign in again.";
+  }
   if (envelope.message) {
     return envelope.message;
   }
@@ -367,6 +374,10 @@ function deriveMessageFromEnvelope(envelope: ApiErrorEnvelope | null, fallback: 
 
 async function buildApiClientError(response: Response, fallback: string): Promise<ApiClientError> {
   const envelope = await parseApiErrorEnvelope(response);
+  if (response.status === 401) {
+    clearStoredAuth();
+    redirectToLoginWithNext();
+  }
   const message = deriveMessageFromEnvelope(envelope, fallback);
   return new ApiClientError(
     message,
@@ -393,6 +404,17 @@ function clearStoredAuth(): void {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem("user");
+}
+
+function redirectToLoginWithNext(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const loginUrl = `/login?next=${encodeURIComponent(currentPath)}`;
+  if (!window.location.pathname.startsWith("/login")) {
+    window.location.assign(loginUrl);
+  }
 }
 
 async function refreshAccessToken(): Promise<string | null> {
@@ -446,6 +468,8 @@ async function fetchWithAuth(url: string, init: RequestInit = {}): Promise<Respo
 
   const nextAccessToken = await refreshAccessToken();
   if (!nextAccessToken) {
+    clearStoredAuth();
+    redirectToLoginWithNext();
     return response;
   }
 
@@ -456,6 +480,10 @@ async function fetchWithAuth(url: string, init: RequestInit = {}): Promise<Respo
       Authorization: `Bearer ${nextAccessToken}`,
     },
   });
+  if (response.status === 401) {
+    clearStoredAuth();
+    redirectToLoginWithNext();
+  }
   return response;
 }
 

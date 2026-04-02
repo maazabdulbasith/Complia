@@ -14,6 +14,7 @@ dj-rest-auth==7.2.0
 djangorestframework-simplejwt==5.5.1
 cryptography==46.0.3
 requests==2.32.5
+PyMuPDF==1.24.14
 
 # Production
 gunicorn==23.0.0

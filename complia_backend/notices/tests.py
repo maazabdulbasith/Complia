@@ -2,7 +2,9 @@ import json
 import os
 import tempfile
 from datetime import timedelta
+from unittest.mock import Mock, patch
 
+import requests
 from django.core.management import call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
@@ -347,7 +349,10 @@ class NoticeAPITests(APITestCase):
         self.client.force_authenticate(user=beta_user)
         upload = SimpleUploadedFile(
             "amount-overflow.txt",
-            b"Notice text with Section 73 and INR 12345678901234567890.",
+            (
+                b"Notice text with detailed context under Section 73 regarding demand mismatch "
+                b"and response requirements with INR 12345678901234567890."
+            ),
             content_type="text/plain",
         )
         response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
@@ -411,7 +416,7 @@ class NoticeAPITests(APITestCase):
         upload = SimpleUploadedFile("scan.jpg", unreadable_binary, content_type="image/jpeg")
         response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Image/PDF parsing is not enabled yet", response.data["detail"])
+        self.assertIn("OCR is disabled", response.data["detail"])
         entitlement = UserEntitlement.objects.get(user=beta_user)
         self.assertEqual(entitlement.parser_credits, 1)
         self.assertEqual(entitlement.lifetime_consumed_credits, 0)
@@ -430,10 +435,295 @@ class NoticeAPITests(APITestCase):
         upload = SimpleUploadedFile("scan.webp", image_like_with_ascii, content_type="image/webp")
         response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Image/PDF parsing is not enabled yet", response.data["detail"])
+        self.assertIn("OCR is disabled", response.data["detail"])
         entitlement = UserEntitlement.objects.get(user=beta_user)
         self.assertEqual(entitlement.parser_credits, 1)
         self.assertEqual(entitlement.lifetime_consumed_credits, 0)
+
+    @override_settings(
+        PARSER_PRIVATE_BETA_ENABLED=True,
+        PARSER_BETA_EMAILS={"betaocr1@complia.in"},
+        OCR_ENABLED=True,
+        OCR_PROVIDER="google_vision",
+        GOOGLE_VISION_API_KEY="test-key",
+        OCR_MAX_PAGES=3,
+        OCR_MIN_TEXT_CHARS=20,
+        OCR_REQUEST_TIMEOUT_SEC=5,
+    )
+    @patch("complia_backend.notices.ocr_utils.requests.post")
+    def test_parser_upload_image_runs_ocr_and_returns_metadata(self, mock_post):
+        beta_user = User.objects.create_user(email="betaocr1@complia.in", password="pass123456", user_type="taxpayer")
+        UserEntitlement.objects.create(
+            user=beta_user,
+            parser_credits=1,
+            lifetime_purchased_credits=1,
+            lifetime_consumed_credits=0,
+        )
+        NoticeType.objects.create(
+            code="GST-ASMT-10",
+            title="Scrutiny of Returns",
+            summary="Scrutiny notice",
+            detailed_explanation="Explanation",
+            consequences_of_ignoring="Penalty",
+            next_steps="Reply",
+            severity="medium",
+            is_active=True,
+        )
+        self.client.force_authenticate(user=beta_user)
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "responses": [
+                {
+                    "fullTextAnnotation": {
+                        "text": (
+                            "GST ASMT - 10 scrutiny notice. Section under which notice is issued: 61. "
+                            "Date by which reply has to be submitted: 23/12/2024."
+                        )
+                    }
+                }
+            ]
+        }
+        mock_post.return_value = mock_response
+
+        upload = SimpleUploadedFile("asmt10.jpg", b"\x89JPEG-BYTES", content_type="image/jpeg")
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["notice_code"], "GST-ASMT-10")
+        payload = response.data["extraction"]["normalized_payload"]
+        self.assertTrue(payload["ocr_used"])
+        self.assertEqual(payload["ocr_engine"], "google_vision")
+        self.assertEqual(payload["ocr_pages_processed"], 1)
+        self.assertGreater(payload["ocr_text_chars"], 20)
+
+    @override_settings(
+        PARSER_PRIVATE_BETA_ENABLED=True,
+        PARSER_BETA_EMAILS={"betaocr2@complia.in"},
+        OCR_ENABLED=True,
+        OCR_PROVIDER="google_vision",
+        GOOGLE_VISION_API_KEY="test-key",
+        OCR_MAX_PAGES=3,
+        OCR_MIN_TEXT_CHARS=20,
+    )
+    @patch("complia_backend.notices.ocr_utils.requests.post")
+    @patch("complia_backend.notices.ocr_utils.fitz.open")
+    def test_parser_upload_pdf_embedded_text_bypasses_vision(self, mock_fitz_open, mock_post):
+        beta_user = User.objects.create_user(email="betaocr2@complia.in", password="pass123456", user_type="taxpayer")
+        UserEntitlement.objects.create(
+            user=beta_user,
+            parser_credits=1,
+            lifetime_purchased_credits=1,
+            lifetime_consumed_credits=0,
+        )
+        NoticeType.objects.create(
+            code="IT-143(2)",
+            title="Scrutiny Assessment Notice",
+            summary="Scrutiny selected",
+            detailed_explanation="Explanation",
+            consequences_of_ignoring="Penalty",
+            next_steps="Reply",
+            severity="high",
+            is_active=True,
+        )
+        self.client.force_authenticate(user=beta_user)
+
+        class FakePage:
+            def get_text(self, _kind):
+                return "Notice under Section 143(2). IT-143(2) selected for scrutiny."
+
+            def get_pixmap(self, *args, **kwargs):
+                raise AssertionError("Raster OCR should not run when embedded PDF text is sufficient.")
+
+        class FakePdfDocument:
+            page_count = 1
+
+            def __getitem__(self, index):
+                if index != 0:
+                    raise IndexError(index)
+                return FakePage()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+        mock_fitz_open.return_value = FakePdfDocument()
+        mock_post.return_value = Mock()
+
+        upload = SimpleUploadedFile("scrutiny.pdf", b"%PDF-1.7 fake", content_type="application/pdf")
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["notice_code"], "IT-143(2)")
+        payload = response.data["extraction"]["normalized_payload"]
+        self.assertFalse(payload["ocr_used"])
+        self.assertEqual(payload["ocr_engine"], "pymupdf_text")
+        mock_post.assert_not_called()
+
+    @override_settings(
+        PARSER_PRIVATE_BETA_ENABLED=True,
+        PARSER_BETA_EMAILS={"betaocr3@complia.in"},
+        OCR_ENABLED=True,
+        OCR_PROVIDER="google_vision",
+        GOOGLE_VISION_API_KEY="test-key",
+    )
+    @patch("complia_backend.notices.ocr_utils.requests.post")
+    def test_parser_upload_ocr_failure_returns_400_and_refunds_credit(self, mock_post):
+        beta_user = User.objects.create_user(email="betaocr3@complia.in", password="pass123456", user_type="taxpayer")
+        UserEntitlement.objects.create(
+            user=beta_user,
+            parser_credits=1,
+            lifetime_purchased_credits=1,
+            lifetime_consumed_credits=0,
+        )
+        self.client.force_authenticate(user=beta_user)
+        mock_post.side_effect = requests.Timeout("network timeout")
+
+        upload = SimpleUploadedFile("scan.jpg", b"\x89JPEG-BYTES", content_type="image/jpeg")
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("OCR request failed", response.data["detail"])
+
+        entitlement = UserEntitlement.objects.get(user=beta_user)
+        self.assertEqual(entitlement.parser_credits, 1)
+        self.assertEqual(entitlement.lifetime_consumed_credits, 0)
+
+    @override_settings(
+        PARSER_PRIVATE_BETA_ENABLED=True,
+        PARSER_BETA_EMAILS={"betaocrpdf@complia.in"},
+        OCR_ENABLED=True,
+        OCR_PROVIDER="google_vision",
+        GOOGLE_VISION_API_KEY="test-key",
+        OCR_MAX_PAGES=2,
+        OCR_MIN_TEXT_CHARS=20,
+    )
+    @patch("complia_backend.notices.ocr_utils.requests.post")
+    @patch("complia_backend.notices.ocr_utils.fitz.open")
+    def test_parser_upload_pdf_ocr_failure_returns_400_and_refunds_credit(self, mock_fitz_open, mock_post):
+        beta_user = User.objects.create_user(email="betaocrpdf@complia.in", password="pass123456", user_type="taxpayer")
+        UserEntitlement.objects.create(
+            user=beta_user,
+            parser_credits=1,
+            lifetime_purchased_credits=1,
+            lifetime_consumed_credits=0,
+        )
+        self.client.force_authenticate(user=beta_user)
+
+        class FakePixmap:
+            def tobytes(self, _fmt):
+                return b"\x89PNG-rasterized"
+
+        class FakePage:
+            def get_text(self, _kind):
+                return "tiny"
+
+            def get_pixmap(self, *args, **kwargs):
+                return FakePixmap()
+
+        class FakePdfDocument:
+            page_count = 1
+
+            def __getitem__(self, index):
+                if index != 0:
+                    raise IndexError(index)
+                return FakePage()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+        mock_fitz_open.return_value = FakePdfDocument()
+        mock_post.side_effect = requests.Timeout("network timeout")
+
+        upload = SimpleUploadedFile("scan.pdf", b"%PDF-1.7 fake", content_type="application/pdf")
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("OCR request failed", response.data["detail"])
+
+        entitlement = UserEntitlement.objects.get(user=beta_user)
+        self.assertEqual(entitlement.parser_credits, 1)
+        self.assertEqual(entitlement.lifetime_consumed_credits, 0)
+
+    @override_settings(PARSER_PRIVATE_BETA_ENABLED=True, PARSER_BETA_EMAILS={"betaocr4@complia.in"}, OCR_ENABLED=False)
+    def test_parser_upload_binary_returns_actionable_message_when_ocr_disabled(self):
+        beta_user = User.objects.create_user(email="betaocr4@complia.in", password="pass123456", user_type="taxpayer")
+        UserEntitlement.objects.create(
+            user=beta_user,
+            parser_credits=1,
+            lifetime_purchased_credits=1,
+            lifetime_consumed_credits=0,
+        )
+        self.client.force_authenticate(user=beta_user)
+
+        upload = SimpleUploadedFile("notice.png", b"\x89PNG-BYTES", content_type="image/png")
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("OCR is disabled", response.data["detail"])
+
+    @override_settings(
+        PARSER_PRIVATE_BETA_ENABLED=True,
+        PARSER_BETA_EMAILS={"betaazure1@complia.in"},
+        OCR_ENABLED=True,
+        OCR_PROVIDER="azure_vision",
+        AZURE_VISION_API_KEY="azure-test-key",
+        AZURE_VISION_ENDPOINT="https://example.cognitiveservices.azure.com",
+        OCR_MIN_TEXT_CHARS=20,
+        OCR_REQUEST_TIMEOUT_SEC=2,
+    )
+    @patch("complia_backend.notices.ocr_utils.requests.get")
+    @patch("complia_backend.notices.ocr_utils.requests.post")
+    def test_parser_upload_image_runs_azure_ocr_and_returns_metadata(self, mock_post, mock_get):
+        beta_user = User.objects.create_user(email="betaazure1@complia.in", password="pass123456", user_type="taxpayer")
+        UserEntitlement.objects.create(
+            user=beta_user,
+            parser_credits=1,
+            lifetime_purchased_credits=1,
+            lifetime_consumed_credits=0,
+        )
+        NoticeType.objects.create(
+            code="GST-ASMT-10",
+            title="Scrutiny of Returns",
+            summary="Scrutiny notice",
+            detailed_explanation="Explanation",
+            consequences_of_ignoring="Penalty",
+            next_steps="Reply",
+            severity="medium",
+            is_active=True,
+        )
+        self.client.force_authenticate(user=beta_user)
+
+        analyze_response = Mock()
+        analyze_response.status_code = 202
+        analyze_response.headers = {"Operation-Location": "https://example.cognitiveservices.azure.com/op/123"}
+        analyze_response.json.return_value = {}
+        mock_post.return_value = analyze_response
+
+        result_response = Mock()
+        result_response.status_code = 200
+        result_response.json.return_value = {
+            "status": "succeeded",
+            "analyzeResult": {
+                "readResults": [
+                    {
+                        "lines": [
+                            {"text": "GST ASMT - 10 notice"},
+                            {"text": "Section under which notice is issued: 61"},
+                        ]
+                    }
+                ]
+            },
+        }
+        mock_get.return_value = result_response
+
+        upload = SimpleUploadedFile("asmt10.png", b"\x89PNG-BYTES", content_type="image/png")
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        payload = response.data["extraction"]["normalized_payload"]
+        self.assertEqual(payload["ocr_engine"], "azure_vision")
+        self.assertTrue(payload["ocr_used"])
 
     @override_settings(PARSER_PRIVATE_BETA_ENABLED=True)
     def test_superadmin_parser_review_update(self):

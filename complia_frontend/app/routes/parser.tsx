@@ -116,6 +116,45 @@ function urgencyLabel(severity: "low" | "medium" | "high", daysLeft: number | nu
   return "Low risk: schedule and respond";
 }
 
+function normalizedPayloadValue(
+  payload: Record<string, unknown> | undefined,
+  key: string
+): unknown {
+  if (!payload || typeof payload !== "object") {
+    return undefined;
+  }
+  return payload[key];
+}
+
+function payloadNumber(payload: Record<string, unknown> | undefined, key: string): number | null {
+  const value = normalizedPayloadValue(payload, key);
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function payloadBoolean(payload: Record<string, unknown> | undefined, key: string): boolean {
+  const value = normalizedPayloadValue(payload, key);
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "1" || normalized === "yes";
+  }
+  return false;
+}
+
+function payloadString(payload: Record<string, unknown> | undefined, key: string): string {
+  const value = normalizedPayloadValue(payload, key);
+  return typeof value === "string" ? value : "";
+}
+
 export function meta({}: Route.MetaArgs) {
   return [
     { title: "Complia | Upload Notice & Understand" },
@@ -197,6 +236,13 @@ export default function ParserUploadPage() {
     : null;
   const severityForGuidance = detectedNotice?.severity || "medium";
   const urgencyText = urgencyLabel(severityForGuidance, deadlineDaysLeft);
+  const extractionPayload = parserJob?.extraction?.normalized_payload;
+  const confidencePercent = Math.round((parserJob?.confidence || 0) * 100);
+  const ocrUsed = payloadBoolean(extractionPayload, "ocr_used");
+  const ocrPagesProcessed = payloadNumber(extractionPayload, "ocr_pages_processed");
+  const ocrTextChars = payloadNumber(extractionPayload, "ocr_text_chars");
+  const ocrEngine = payloadString(extractionPayload, "ocr_engine");
+  const lowConfidence = confidencePercent < 75;
 
   useEffect(() => {
     setIsLoggedIn(Boolean(localStorage.getItem("complia_token")));
@@ -644,7 +690,7 @@ export default function ParserUploadPage() {
                   className="w-full rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-slate-700"
                 />
                 <p className="mt-1 text-xs text-slate-500">
-                  Parser beta currently supports text files only (`.txt`). OCR for image/PDF is coming next.
+                  Supported: PDF, PNG, JPG, JPEG, WEBP, and TXT. For best OCR, upload clear scans.
                 </p>
               </div>
 
@@ -697,7 +743,7 @@ export default function ParserUploadPage() {
                   <div className="rounded-xl border border-slate-200 bg-white p-3">
                     <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Confidence</p>
                     <p className="mt-1 text-sm font-semibold text-slate-900">
-                      {Math.round((parserJob.confidence || 0) * 100)}%
+                      {confidencePercent}%
                     </p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white p-3">
@@ -730,6 +776,31 @@ export default function ParserUploadPage() {
                     )}
                   </div>
                 </div>
+                {(ocrUsed || lowConfidence) && (
+                  <div className="rounded-xl border border-slate-200 bg-white p-3">
+                    <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">OCR context</p>
+                    {ocrUsed ? (
+                      <p className="mt-1 text-sm font-semibold text-slate-900">
+                        OCR processed {ocrPagesProcessed || 1} page(s)
+                        {ocrTextChars !== null ? ` and extracted ~${ocrTextChars} readable chars.` : "."}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-sm text-slate-700">
+                        OCR was not needed for this file. Embedded text extraction was used.
+                      </p>
+                    )}
+                    {ocrEngine && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        Engine: {ocrEngine === "pymupdf_text" ? "PyMuPDF text extraction" : ocrEngine}
+                      </p>
+                    )}
+                    {lowConfidence && (
+                      <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                        Low confidence detected. Manual review is recommended before acting on this output.
+                      </p>
+                    )}
+                  </div>
+                )}
                 {parserJob.extraction?.raw_text_excerpt && (
                   <div className="rounded-xl border border-slate-200 bg-white p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">

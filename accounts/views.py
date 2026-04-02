@@ -1,5 +1,4 @@
 import hashlib
-import hashlib
 import hmac
 import json
 import uuid
@@ -9,7 +8,6 @@ from io import StringIO
 
 import requests
 from django.conf import settings
-from django.db import transaction
 from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.utils import timezone
