@@ -239,12 +239,13 @@ class NoticeAPITests(APITestCase):
         self.assertEqual(feedback.internal_notes, "Updated notice wording.")
         self.assertIsNotNone(feedback.reviewed_at)
 
-    def test_parser_upload_forbidden_when_private_beta_disabled(self):
+    def test_parser_upload_requires_payment_when_private_beta_disabled(self):
         beta_user = User.objects.create_user(email="beta@complia.in", password="pass123456", user_type="taxpayer")
         self.client.force_authenticate(user=beta_user)
         upload = SimpleUploadedFile("notice.txt", b"Section 73 INR 12345", content_type="text/plain")
         response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_402_PAYMENT_REQUIRED)
+        self.assertEqual(response.data["code"], "PAYMENT_REQUIRED")
 
     def test_parser_upload_admin_allowed_when_private_beta_disabled(self):
         admin = User.objects.create_user(

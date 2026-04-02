@@ -176,8 +176,6 @@ class ParserUploadView(APIView):
 
     def post(self, request):
         is_admin_bypass = request.user.is_superuser or getattr(request.user, "user_type", "") == "admin"
-        if not settings.PARSER_PRIVATE_BETA_ENABLED and not is_admin_bypass:
-            return Response({"detail": "Parser private beta is disabled."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = ParserUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
