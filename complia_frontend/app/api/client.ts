@@ -248,6 +248,13 @@ export type PaymentOrder = {
   updated_at: string;
 };
 
+export type AdminPaymentOrder = PaymentOrder & {
+  user_email: string | null;
+  admin_status: "initiated" | "abandoned" | "failed" | "success";
+  credit_granted_at: string | null;
+  failure_reason: string;
+};
+
 export type UserEntitlements = {
   parser_credits: number;
   lifetime_purchased_credits: number;
@@ -810,6 +817,36 @@ export async function updateAdminAssistedIntent(
     throw new Error(await getApiErrorMessage(response, "Failed to update assisted intent"));
   }
   return response.json();
+}
+
+export async function getAdminPaymentOrders(status?: string): Promise<AdminPaymentOrder[]> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  const response = await fetchWithAuth(`${API_BASE}/admin/payment-orders/${query}`);
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Failed to fetch payment orders"));
+  }
+  const data = await response.json();
+  if (isPaginatedResponse<AdminPaymentOrder>(data)) {
+    return data.results;
+  }
+  if (Array.isArray(data)) {
+    return data;
+  }
+  throw new Error("Unexpected payment orders response format");
+}
+
+export async function grantAdminPaymentCredits(orderId: string): Promise<PaymentOrder> {
+  const response = await fetchWithAuth(`${API_BASE}/admin/payments/${encodeURIComponent(orderId)}/grant-credits/`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Failed to grant credits for this payment order"));
+  }
+  const data = (await response.json()) as { order?: PaymentOrder };
+  if (!data.order) {
+    throw new Error("Payment grant response did not include order details");
+  }
+  return data.order;
 }
 
 export async function getAdminNoticeItems(status?: "stale" | "unverified"): Promise<AdminNoticeItem[]> {

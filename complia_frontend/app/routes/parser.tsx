@@ -116,6 +116,31 @@ function urgencyLabel(severity: "low" | "medium" | "high", daysLeft: number | nu
   return "Low risk: schedule and respond";
 }
 
+function priorityBand(
+  severity: "low" | "medium" | "high",
+  daysLeft: number | null,
+  confidencePercent: number
+): "critical" | "high" | "medium" | "low" {
+  if (daysLeft !== null && daysLeft < 0) return "critical";
+  if (severity === "high" && (daysLeft === null || daysLeft <= 7)) return "critical";
+  if (severity === "high" || (daysLeft !== null && daysLeft <= 10)) return "high";
+  if (severity === "medium" || confidencePercent < 75) return "medium";
+  return "low";
+}
+
+function formatDateLabel(isoDate: string | null | undefined): string {
+  if (!isoDate) return "Not detected";
+  const parsed = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return isoDate;
+  }
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(parsed);
+}
+
 function normalizedPayloadValue(
   payload: Record<string, unknown> | undefined,
   key: string
@@ -153,6 +178,44 @@ function payloadBoolean(payload: Record<string, unknown> | undefined, key: strin
 function payloadString(payload: Record<string, unknown> | undefined, key: string): string {
   const value = normalizedPayloadValue(payload, key);
   return typeof value === "string" ? value : "";
+}
+
+function buildPersonalizedActionChecklist({
+  noticeTitle,
+  severity,
+  daysLeft,
+  deadlineLabel,
+  legalSection,
+  amountClaimed,
+}: {
+  noticeTitle: string;
+  severity: "low" | "medium" | "high";
+  daysLeft: number | null;
+  deadlineLabel: string;
+  legalSection: string;
+  amountClaimed: string;
+}): string[] {
+  const checklist: string[] = [];
+  checklist.push(`Confirm that the uploaded notice is ${noticeTitle || "the detected notice"} and archive a copy with timestamp.`);
+  if (deadlineLabel !== "Not detected") {
+    checklist.push(`Block calendar for reply deadline: ${deadlineLabel}.`);
+  } else {
+    checklist.push("Locate reply deadline from annexure and block it on your calendar today.");
+  }
+  if (legalSection && legalSection !== "Not detected") {
+    checklist.push(`Prepare response against ${legalSection} with document proof and return filings.`);
+  } else {
+    checklist.push("Identify the exact legal section and map your response to that section.");
+  }
+  if (amountClaimed && amountClaimed !== "Not detected") {
+    checklist.push(`Reconcile the claimed amount (${amountClaimed}) against books and challans.`);
+  }
+  if (severity === "high" || (daysLeft !== null && daysLeft <= 7)) {
+    checklist.push("Escalate to CA/tax counsel within 24 hours to avoid recovery escalation.");
+  } else {
+    checklist.push("Get CA review this week and finalize draft reply before submission.");
+  }
+  return checklist;
 }
 
 export function meta({}: Route.MetaArgs) {
@@ -195,6 +258,7 @@ export default function ParserUploadPage() {
   const [isSavingNotice, setIsSavingNotice] = useState(false);
   const [saveNoticeMessage, setSaveNoticeMessage] = useState<string | null>(null);
   const [saveNoticeError, setSaveNoticeError] = useState<string | null>(null);
+  const [copyBriefMessage, setCopyBriefMessage] = useState<string | null>(null);
 
   const toUserMessage = (error: unknown, fallback: string): string => {
     if (error instanceof ApiClientError) {
@@ -243,6 +307,54 @@ export default function ParserUploadPage() {
   const ocrTextChars = payloadNumber(extractionPayload, "ocr_text_chars");
   const ocrEngine = payloadString(extractionPayload, "ocr_engine");
   const lowConfidence = confidencePercent < 75;
+  const replyDeadlineLabel = formatDateLabel(parserJob?.extraction?.deadline_date);
+  const riskBand = priorityBand(severityForGuidance, deadlineDaysLeft, confidencePercent);
+  const isCodeMismatch =
+    Boolean(noticeCode.trim()) &&
+    Boolean(parserJob?.notice_code) &&
+    noticeCode.trim().toUpperCase() !== (parserJob?.notice_code || "").toUpperCase();
+  const actionChecklist = useMemo(() => {
+    return buildPersonalizedActionChecklist({
+      noticeTitle: detectedNotice?.title || parserJob?.notice_code || "detected notice",
+      severity: severityForGuidance,
+      daysLeft: deadlineDaysLeft,
+      deadlineLabel: replyDeadlineLabel,
+      legalSection: parserJob?.extraction?.legal_section || "Not detected",
+      amountClaimed: parserJob?.extraction?.amount_claimed || "Not detected",
+    });
+  }, [
+    detectedNotice?.title,
+    parserJob?.notice_code,
+    parserJob?.extraction?.legal_section,
+    parserJob?.extraction?.amount_claimed,
+    severityForGuidance,
+    deadlineDaysLeft,
+    replyDeadlineLabel,
+  ]);
+  const caBrief = useMemo(() => {
+    return [
+      "Complia case handoff",
+      `Detected notice: ${parserJob?.notice_code || "Not detected"}`,
+      `Notice title: ${detectedNotice?.title || "Not detected"}`,
+      `Severity: ${severityForGuidance}`,
+      `Deadline: ${replyDeadlineLabel}`,
+      `Legal section: ${parserJob?.extraction?.legal_section || "Not detected"}`,
+      `Amount claimed: ${parserJob?.extraction?.amount_claimed || "Not detected"}`,
+      `Urgency: ${urgencyText}`,
+      "",
+      "Recommended next actions:",
+      ...actionChecklist.map((step, index) => `${index + 1}. ${step}`),
+    ].join("\n");
+  }, [
+    parserJob?.notice_code,
+    parserJob?.extraction?.legal_section,
+    parserJob?.extraction?.amount_claimed,
+    detectedNotice?.title,
+    severityForGuidance,
+    replyDeadlineLabel,
+    urgencyText,
+    actionChecklist,
+  ]);
 
   useEffect(() => {
     setIsLoggedIn(Boolean(localStorage.getItem("complia_token")));
@@ -356,6 +468,7 @@ export default function ParserUploadPage() {
     setShowFullExcerpt(false);
     setSaveNoticeMessage(null);
     setSaveNoticeError(null);
+    setCopyBriefMessage(null);
   }, [parserJob?.id]);
 
   const refreshEntitlements = async (): Promise<UserEntitlements | null> => {
@@ -629,6 +742,18 @@ export default function ParserUploadPage() {
     await saveDetectedNotice(parserJob.notice, { source: "manual" });
   };
 
+  const handleCopyBrief = async () => {
+    try {
+      if (!navigator.clipboard) {
+        throw new Error("Clipboard is unavailable");
+      }
+      await navigator.clipboard.writeText(caBrief);
+      setCopyBriefMessage("Case brief copied.");
+    } catch {
+      setCopyBriefMessage("Copy failed. Select and copy manually.");
+    }
+  };
+
   return (
     <div className="grid-aurora min-h-screen overflow-x-hidden px-4 py-8 text-slate-900 sm:px-5 sm:py-10">
       <div className="pointer-events-none absolute -top-32 right-0 h-96 w-96 rounded-full bg-cyan-300/20 blur-3xl" />
@@ -659,8 +784,8 @@ export default function ParserUploadPage() {
               Upload Notice & Understand
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-              Upload your notice, complete a quick payment, and unlock extracted section, amount,
-              confidence, and suggested interpretation.
+              Upload your notice, complete quick checkout, and unlock a personalized response pack:
+              detected notice type, legal section, deadline risk, and a CA-ready handoff brief.
             </p>
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -761,7 +886,7 @@ export default function ParserUploadPage() {
                   <div className="rounded-xl border border-slate-200 bg-white p-3">
                     <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Reply deadline</p>
                     <p className="mt-1 text-sm font-semibold text-slate-900">
-                      {parserJob.extraction?.deadline_date || "Not detected"}
+                      {replyDeadlineLabel}
                     </p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white p-3">
@@ -776,6 +901,47 @@ export default function ParserUploadPage() {
                     )}
                   </div>
                 </div>
+
+                {isCodeMismatch && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    Uploaded notice appears different from entered code. Entered:{" "}
+                    <span className="font-semibold">{noticeCode.trim().toUpperCase()}</span>, detected:{" "}
+                    <span className="font-semibold">{parserJob.notice_code}</span>.
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      Personalized response pack
+                    </p>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                        riskBand === "critical"
+                          ? "bg-rose-100 text-rose-700"
+                          : riskBand === "high"
+                            ? "bg-amber-100 text-amber-700"
+                            : riskBand === "medium"
+                              ? "bg-sky-100 text-sky-700"
+                              : "bg-emerald-100 text-emerald-700"
+                      }`}
+                    >
+                      {riskBand} priority
+                    </span>
+                  </div>
+
+                  <div className="mt-3 space-y-2">
+                    {actionChecklist.map((item, index) => (
+                      <div key={`${item}-${index}`} className="flex items-start gap-2 text-sm text-slate-700">
+                        <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-[11px] font-semibold text-white">
+                          {index + 1}
+                        </span>
+                        <p className="leading-6">{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 {(ocrUsed || lowConfidence) && (
                   <div className="rounded-xl border border-slate-200 bg-white p-3">
                     <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">OCR context</p>
@@ -801,6 +967,23 @@ export default function ParserUploadPage() {
                     )}
                   </div>
                 )}
+
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">CA handoff brief</p>
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyBrief()}
+                      className="text-xs font-semibold text-blue-700 transition hover:text-blue-800"
+                    >
+                      Copy brief
+                    </button>
+                  </div>
+                  <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-6 text-slate-700">
+                    {caBrief}
+                  </pre>
+                  {copyBriefMessage && <p className="mt-2 text-xs text-emerald-700">{copyBriefMessage}</p>}
+                </div>
                 {parserJob.extraction?.raw_text_excerpt && (
                   <div className="rounded-xl border border-slate-200 bg-white p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1052,7 +1235,7 @@ export default function ParserUploadPage() {
               <ol className="mt-3 space-y-2">
                 <li>1. Upload your notice file.</li>
                 <li>2. Complete secure Cashfree checkout.</li>
-                <li>3. Result unlocks with extracted fields and confidence.</li>
+                <li>3. Result unlocks with extracted fields, risk checklist, and CA handoff brief.</li>
               </ol>
             </section>
           </aside>

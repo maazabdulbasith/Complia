@@ -1,4 +1,8 @@
-﻿from rest_framework import serializers
+from datetime import timedelta
+
+from django.conf import settings
+from django.utils import timezone
+from rest_framework import serializers
 
 from .models import (
     AnalyticsEvent,
@@ -363,6 +367,55 @@ class PaymentOrderSerializer(serializers.ModelSerializer):
         return float(obj.amount_paise) / 100.0
 
 
+class AdminPaymentOrderSerializer(serializers.ModelSerializer):
+    plan_key = serializers.CharField(source="plan.key", read_only=True)
+    user_email = serializers.EmailField(source="user.email", read_only=True, allow_null=True)
+    amount_inr = serializers.SerializerMethodField()
+    admin_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PaymentOrder
+        fields = [
+            "id",
+            "order_id",
+            "status",
+            "admin_status",
+            "plan_key",
+            "user_email",
+            "amount_paise",
+            "amount_inr",
+            "currency",
+            "credits",
+            "provider",
+            "provider_order_id",
+            "payment_session_id",
+            "checkout_url",
+            "paid_at",
+            "credit_granted_at",
+            "failure_reason",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+    def get_amount_inr(self, obj):
+        return float(obj.amount_paise) / 100.0
+
+    def get_admin_status(self, obj):
+        if obj.status == "paid":
+            return "success"
+        if obj.status == "failed":
+            return "failed"
+        if obj.status == "cancelled":
+            return "abandoned"
+
+        stale_after_minutes = getattr(settings, "PAYMENT_PENDING_ABANDON_MINUTES", 20)
+        cutoff = timezone.now() - timedelta(minutes=stale_after_minutes)
+        if obj.status in {"created", "payment_pending"} and obj.created_at < cutoff:
+            return "abandoned"
+        return "initiated"
+
+
 class UserEntitlementSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserEntitlement
@@ -372,3 +425,4 @@ class UserEntitlementSerializer(serializers.ModelSerializer):
             "lifetime_consumed_credits",
             "updated_at",
         ]
+

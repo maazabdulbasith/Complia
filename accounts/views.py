@@ -37,6 +37,7 @@ from .payment_ops import grant_parser_credits_once, is_failure_status, is_order_
 from .serializers import (
     AdminAssistedIntentSerializer,
     AdminCAHelpRequestSerializer,
+    AdminPaymentOrderSerializer,
     AnalyticsEventSerializer,
     AssistedOfferSerializer,
     AssistedIntentSerializer,
@@ -853,6 +854,44 @@ class PaymentOrderGrantCreditsView(generics.GenericAPIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class SuperAdminPaymentOrderViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = AdminPaymentOrderSerializer
+    permission_classes = [IsSuperAdmin]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "admin_ops"
+    queryset = PaymentOrder.objects.select_related("user", "plan").all()
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["order_id", "provider_order_id", "user__email", "failure_reason", "plan__key"]
+    ordering_fields = ["created_at", "updated_at", "paid_at", "amount_paise", "status"]
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        status_filter = (self.request.query_params.get("status") or "").strip().lower()
+        stale_after_minutes = getattr(settings, "PAYMENT_PENDING_ABANDON_MINUTES", 20)
+        stale_cutoff = timezone.now() - timedelta(minutes=stale_after_minutes)
+
+        if status_filter in {"created", "payment_pending", "paid", "failed", "cancelled"}:
+            return queryset.filter(status=status_filter)
+
+        if status_filter == "success":
+            return queryset.filter(status="paid")
+        if status_filter == "failed":
+            return queryset.filter(status="failed")
+        if status_filter == "initiated":
+            return queryset.filter(status__in=["created", "payment_pending"], created_at__gte=stale_cutoff)
+        if status_filter == "abandoned":
+            return queryset.filter(
+                Q(status="cancelled")
+                | Q(status__in=["created", "payment_pending"], created_at__lt=stale_cutoff)
+            )
+        return queryset
 
 
 class SuperAdminMetricsView(generics.GenericAPIView):

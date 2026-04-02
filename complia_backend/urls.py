@@ -36,6 +36,7 @@ from accounts.views import (
     SuperAdminFunnelView,
     SuperAdminKpiView,
     SuperAdminMetricsView,
+    SuperAdminPaymentOrderViewSet,
 )
 
 # API v1 Router
@@ -51,6 +52,7 @@ admin_router_v1.register(r'assisted-intents', SuperAdminAssistedIntentViewSet, b
 admin_router_v1.register(r'notices', SuperAdminNoticeTypeViewSet, basename='admin-notice')
 admin_router_v1.register(r'parser-jobs', SuperAdminParserJobViewSet, basename='admin-parser-job')
 admin_router_v1.register(r'parser-benchmarks', SuperAdminParserBenchmarkRunViewSet, basename='admin-parser-benchmark')
+admin_router_v1.register(r'payment-orders', SuperAdminPaymentOrderViewSet, basename='admin-payment-order')
 
 urlpatterns = [
     path('robots.txt', robots_txt, name='robots-txt'),

@@ -2,8 +2,10 @@ import base64
 import hashlib
 import hmac
 import json
+from datetime import timedelta
 from django.test import TestCase, override_settings
 from django.core.management import call_command
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 from unittest.mock import Mock, patch
@@ -673,6 +675,108 @@ class PaymentsPhase3ATests(APITestCase):
         self.client.force_authenticate(user=self.user)
         response = self.client.post(f"/api/v1/admin/payments/{payment_order.order_id}/grant-credits/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(PAYMENT_PENDING_ABANDON_MINUTES=20)
+    def test_admin_payment_orders_list_returns_mapped_statuses(self):
+        recent_pending = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-admin-list-001",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="payment_pending",
+        )
+        stale_pending = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-admin-list-002",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="payment_pending",
+        )
+        PaymentOrder.objects.filter(id=stale_pending.id).update(
+            created_at=timezone.now() - timedelta(minutes=45)
+        )
+        paid_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-admin-list-003",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="paid",
+            paid_at=timezone.now(),
+        )
+        PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-admin-list-004",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="failed",
+        )
+
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get("/api/v1/admin/payment-orders/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(response.data["count"], 4)
+
+        by_order_id = {row["order_id"]: row for row in response.data["results"]}
+        self.assertEqual(by_order_id[recent_pending.order_id]["admin_status"], "initiated")
+        self.assertEqual(by_order_id[stale_pending.order_id]["admin_status"], "abandoned")
+        self.assertEqual(by_order_id[paid_order.order_id]["admin_status"], "success")
+
+    @override_settings(PAYMENT_PENDING_ABANDON_MINUTES=15)
+    def test_admin_payment_orders_filter_abandoned(self):
+        stale_pending = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-admin-filter-001",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="payment_pending",
+        )
+        PaymentOrder.objects.filter(id=stale_pending.id).update(
+            created_at=timezone.now() - timedelta(minutes=30)
+        )
+        cancelled = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-admin-filter-002",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="cancelled",
+        )
+        PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-admin-filter-003",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="paid",
+            paid_at=timezone.now(),
+        )
+
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get("/api/v1/admin/payment-orders/?status=abandoned")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 2)
+        returned_ids = {row["order_id"] for row in response.data["results"]}
+        self.assertIn(stale_pending.order_id, returned_ids)
+        self.assertIn(cancelled.order_id, returned_ids)
 
     def test_reconcile_payment_orders_command_grants_missing_credits(self):
         payment_order = PaymentOrder.objects.create(

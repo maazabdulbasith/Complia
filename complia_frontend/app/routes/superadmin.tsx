@@ -7,8 +7,10 @@ import {
   getAdminCARequests,
   getAdminFeedbackItems,
   getAdminNoticeItems,
+  getAdminPaymentOrders,
   getAdminParserBenchmarks,
   getAdminParserJobs,
+  grantAdminPaymentCredits,
   getSuperAdminFunnel,
   getSuperAdminKpis,
   getSuperAdminMetrics,
@@ -27,6 +29,7 @@ import type {
   AdminKpis,
   AdminMetrics,
   AdminNoticeItem,
+  AdminPaymentOrder,
   ParserJob,
   ParserBenchmarkRun,
 } from "../api/client";
@@ -41,6 +44,22 @@ function StatCard({ label, value, accent }: { label: string; value: string | num
   );
 }
 
+function PaymentStatusPill({ status }: { status: AdminPaymentOrder["admin_status"] }) {
+  const className =
+    status === "success"
+      ? "bg-emerald-100 text-emerald-700"
+      : status === "failed"
+        ? "bg-rose-100 text-rose-700"
+        : status === "abandoned"
+          ? "bg-amber-100 text-amber-800"
+          : "bg-sky-100 text-sky-700";
+  return (
+    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${className}`}>
+      {status}
+    </span>
+  );
+}
+
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
@@ -50,6 +69,7 @@ export default function SuperAdminDashboard() {
   const [caRequests, setCARequests] = useState<AdminCARequest[]>([]);
   const [feedbackItems, setFeedbackItems] = useState<AdminFeedbackItem[]>([]);
   const [assistedIntents, setAssistedIntents] = useState<AdminAssistedIntent[]>([]);
+  const [paymentOrders, setPaymentOrders] = useState<AdminPaymentOrder[]>([]);
   const [noticeQaItems, setNoticeQaItems] = useState<AdminNoticeItem[]>([]);
   const [parserJobs, setParserJobs] = useState<ParserJob[]>([]);
   const [parserBenchmarkRuns, setParserBenchmarkRuns] = useState<ParserBenchmarkRun[]>([]);
@@ -61,6 +81,7 @@ export default function SuperAdminDashboard() {
   const [caStatusFilter, setCAStatusFilter] = useState<string>("");
   const [feedbackStatusFilter, setFeedbackStatusFilter] = useState<string>("");
   const [assistedStatusFilter, setAssistedStatusFilter] = useState<string>("");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("");
   const [noticeQaFilter, setNoticeQaFilter] = useState<"" | "stale" | "unverified">("");
   const [parserStatusFilter, setParserStatusFilter] = useState<string>("");
   const [exportingReport, setExportingReport] = useState<AdminCsvReportKey | null>(null);
@@ -89,6 +110,7 @@ export default function SuperAdminDashboard() {
         caData,
         feedbackData,
         assistedData,
+        paymentData,
         noticeQaData,
         parserData,
         parserBenchmarkData,
@@ -99,6 +121,7 @@ export default function SuperAdminDashboard() {
         getAdminCARequests(caStatusFilter || undefined),
         getAdminFeedbackItems(feedbackStatusFilter || undefined),
         getAdminAssistedIntents(assistedStatusFilter || undefined),
+        getAdminPaymentOrders(paymentStatusFilter || undefined),
         getAdminNoticeItems(noticeQaFilter || undefined),
         getAdminParserJobs(parserStatusFilter || undefined),
         getAdminParserBenchmarks(),
@@ -109,6 +132,7 @@ export default function SuperAdminDashboard() {
       setCARequests(caData);
       setFeedbackItems(feedbackData);
       setAssistedIntents(assistedData);
+      setPaymentOrders(paymentData);
       setNoticeQaItems(noticeQaData);
       setParserJobs(parserData);
       setParserBenchmarkRuns(parserBenchmarkData);
@@ -144,6 +168,7 @@ export default function SuperAdminDashboard() {
     caStatusFilter,
     feedbackStatusFilter,
     assistedStatusFilter,
+    paymentStatusFilter,
     noticeQaFilter,
     parserStatusFilter,
   ]);
@@ -163,6 +188,7 @@ export default function SuperAdminDashboard() {
     caStatusFilter,
     feedbackStatusFilter,
     assistedStatusFilter,
+    paymentStatusFilter,
     noticeQaFilter,
     parserStatusFilter,
   ]);
@@ -268,6 +294,29 @@ export default function SuperAdminDashboard() {
     }
   };
 
+  const paymentStatusCounts = useMemo(() => {
+    return paymentOrders.reduce(
+      (acc, order) => {
+        acc[order.admin_status] += 1;
+        return acc;
+      },
+      { initiated: 0, abandoned: 0, failed: 0, success: 0 }
+    );
+  }, [paymentOrders]);
+
+  const handleGrantCredits = async (orderId: string) => {
+    setSavingKey(`payment-${orderId}`);
+    setError(null);
+    try {
+      await grantAdminPaymentCredits(orderId);
+      await fetchAll(true);
+    } catch {
+      setError("Failed to grant credits for this order. Please retry.");
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-slate-100 via-indigo-50 to-cyan-50 text-slate-900">
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
@@ -326,14 +375,33 @@ export default function SuperAdminDashboard() {
           </div>
         ) : metrics ? (
           <>
-            <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[220px_minmax(0,1fr)]">
+              <aside className="xl:sticky xl:top-6 xl:self-start">
+                <nav className="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 mb-3">
+                    Sections
+                  </p>
+                  <div className="space-y-1.5 text-sm font-semibold text-slate-700">
+                    <a href="#overview" className="block rounded-lg px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700">Overview</a>
+                    <a href="#payments" className="block rounded-lg px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700">Payments</a>
+                    <a href="#assisted-intents" className="block rounded-lg px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700">Assisted Intents</a>
+                    <a href="#notice-qa" className="block rounded-lg px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700">Notice QA</a>
+                    <a href="#parser-queue" className="block rounded-lg px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700">Parser Queue</a>
+                    <a href="#ca-requests" className="block rounded-lg px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700">CA Requests</a>
+                    <a href="#feedback" className="block rounded-lg px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700">Feedback</a>
+                  </div>
+                </nav>
+              </aside>
+
+              <div className="space-y-6">
+            <section id="overview" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <StatCard label="Visitors Till Date" value={metrics.total_visitors} accent="text-indigo-600" />
               <StatCard label="Visitors Today" value={metrics.visitors_today} accent="text-cyan-600" />
               <StatCard label="Total Searches" value={metrics.total_searches} accent="text-violet-600" />
               <StatCard label="CA Help Requests" value={metrics.ca_help_submissions} accent="text-rose-600" />
             </section>
 
-            <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm mb-6">
+            <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <h2 className="text-lg font-bold text-slate-900">Conversion Funnel + KPI Trends</h2>
                 <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
@@ -389,7 +457,96 @@ export default function SuperAdminDashboard() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm mb-6">
+            <section id="payments" className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+                <h2 className="text-xl font-bold text-slate-900">
+                  Payments Inbox
+                  <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                    {paymentOrders.length}
+                  </span>
+                </h2>
+                <select
+                  value={paymentStatusFilter}
+                  onChange={(e) => setPaymentStatusFilter(e.target.value)}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="">All statuses</option>
+                  <option value="initiated">Initiated</option>
+                  <option value="abandoned">Abandoned</option>
+                  <option value="failed">Failed</option>
+                  <option value="success">Success</option>
+                </select>
+              </div>
+
+              <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-sky-700">Initiated</p>
+                  <p className="text-2xl font-bold text-sky-900">{paymentStatusCounts.initiated}</p>
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-amber-700">Abandoned</p>
+                  <p className="text-2xl font-bold text-amber-900">{paymentStatusCounts.abandoned}</p>
+                </div>
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-rose-700">Failed</p>
+                  <p className="text-2xl font-bold text-rose-900">{paymentStatusCounts.failed}</p>
+                </div>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-emerald-700">Success</p>
+                  <p className="text-2xl font-bold text-emerald-900">{paymentStatusCounts.success}</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {paymentOrders.map((item) => (
+                  <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-slate-900">{item.order_id}</p>
+                        <p className="text-sm text-slate-500">
+                          {item.user_email || "Guest checkout"} · {item.plan_key} · ₹{item.amount_inr}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Created {new Date(item.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <PaymentStatusPill status={item.admin_status} />
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                          raw: {item.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    {item.failure_reason && (
+                      <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                        {item.failure_reason}
+                      </p>
+                    )}
+
+                    {item.admin_status === "success" && !item.credit_granted_at && (
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={() => void handleGrantCredits(item.order_id)}
+                          disabled={savingKey === `payment-${item.order_id}`}
+                          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-60"
+                        >
+                          {savingKey === `payment-${item.order_id}` ? "Granting..." : "Grant Missing Credits"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {paymentOrders.length === 0 && (
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                    No payment orders match this filter.
+                  </p>
+                )}
+              </div>
+            </section>
+
+            <section id="assisted-intents" className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm mb-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
                 <h2 className="text-xl font-bold text-slate-900">
                   Assisted Intent Inbox
@@ -470,7 +627,7 @@ export default function SuperAdminDashboard() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm mb-6">
+            <section id="notice-qa" className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm mb-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
                 <h2 className="text-xl font-bold text-slate-900">
                   Notice Editorial QA
@@ -565,7 +722,7 @@ export default function SuperAdminDashboard() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm mb-6">
+            <section id="parser-queue" className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm mb-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
                 <h2 className="text-xl font-bold text-slate-900">
                   Parser Review Queue
@@ -686,7 +843,7 @@ export default function SuperAdminDashboard() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm mb-6">
+            <section id="ca-requests" className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm mb-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
                 <h2 className="text-xl font-bold text-slate-900">
                   CA Requests Inbox
@@ -783,7 +940,7 @@ export default function SuperAdminDashboard() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">
+            <section id="feedback" className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
                 <h2 className="text-xl font-bold text-slate-900">
                   Feedback Inbox
@@ -856,6 +1013,8 @@ export default function SuperAdminDashboard() {
                 )}
               </div>
             </section>
+              </div>
+            </div>
           </>
         ) : null}
       </main>
