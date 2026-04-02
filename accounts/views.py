@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import json
@@ -176,23 +177,55 @@ def _cashfree_signature_valid(raw_body: bytes, signature: str, timestamp: str = 
     if not signature:
         return False
 
-    digest_hex = hmac.new(
-        settings.CASHFREE_WEBHOOK_SECRET.encode("utf-8"),
+    signing_key = settings.CASHFREE_WEBHOOK_SECRET.encode("utf-8")
+    signature_clean = signature.strip()
+    # Accept common prefixed signatures such as "sha256=<signature>".
+    if "=" in signature_clean and signature_clean.lower().startswith("sha256="):
+        signature_clean = signature_clean.split("=", 1)[1].strip()
+
+    digest = hmac.new(
+        signing_key,
         raw_body,
         hashlib.sha256,
-    ).hexdigest()
-    if constant_time_compare(signature, digest_hex):
-        return True
+    ).digest()
+    digest_hex = digest.hex()
+    digest_b64 = base64.b64encode(digest).decode("utf-8")
+    digest_b64_urlsafe = base64.urlsafe_b64encode(digest).decode("utf-8")
+    candidates = {
+        digest_hex,
+        digest_hex.lower(),
+        digest_b64,
+        digest_b64.rstrip("="),
+        digest_b64_urlsafe,
+        digest_b64_urlsafe.rstrip("="),
+    }
+    for candidate in candidates:
+        if constant_time_compare(signature_clean, candidate):
+            return True
 
     if timestamp:
-        timestamp_payload = f"{timestamp}{raw_body.decode('utf-8')}".encode("utf-8")
-        digest_with_timestamp = hmac.new(
-            settings.CASHFREE_WEBHOOK_SECRET.encode("utf-8"),
+        raw_text = raw_body.decode("utf-8", errors="replace")
+        timestamp_payload = f"{timestamp}{raw_text}".encode("utf-8")
+        digest_ts = hmac.new(
+            signing_key,
             timestamp_payload,
             hashlib.sha256,
-        ).hexdigest()
-        if constant_time_compare(signature, digest_with_timestamp):
-            return True
+        ).digest()
+        digest_ts_hex = digest_ts.hex()
+        digest_ts_b64 = base64.b64encode(digest_ts).decode("utf-8")
+        digest_ts_b64_urlsafe = base64.urlsafe_b64encode(digest_ts).decode("utf-8")
+        timestamp_candidates = {
+            digest_ts_hex,
+            digest_ts_hex.lower(),
+            digest_ts_b64,
+            digest_ts_b64.rstrip("="),
+            digest_ts_b64_urlsafe,
+            digest_ts_b64_urlsafe.rstrip("="),
+        }
+        for candidate in timestamp_candidates:
+            if constant_time_compare(signature_clean, candidate):
+                return True
+
     return False
 
 

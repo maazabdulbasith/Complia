@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import json
@@ -480,6 +481,43 @@ class PaymentsPhase3ATests(APITestCase):
         self.assertEqual(entitlement.parser_credits, 1)
         self.assertEqual(entitlement.lifetime_purchased_credits, 1)
         self.assertEqual(PaymentTransaction.objects.count(), 1)
+
+    @override_settings(CASHFREE_WEBHOOK_SECRET="whsec_test")
+    def test_cashfree_webhook_accepts_base64_timestamp_signature(self):
+        payment_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-webhook-003",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="payment_pending",
+        )
+        payload = {
+            "type": "PAYMENT_SUCCESS_WEBHOOK",
+            "data": {
+                "order": {"order_id": payment_order.order_id},
+                "payment": {"cf_payment_id": "cfpay_003", "payment_status": "SUCCESS"},
+            },
+        }
+        payload_json = json.dumps(payload)
+        timestamp = "1739012345"
+        signed_payload = f"{timestamp}{payload_json}".encode("utf-8")
+        signature = base64.b64encode(
+            hmac.new(b"whsec_test", signed_payload, hashlib.sha256).digest()
+        ).decode("utf-8")
+
+        response = self.client.post(
+            "/api/v1/payments/webhooks/cashfree/",
+            data=payload_json,
+            content_type="application/json",
+            HTTP_X_WEBHOOK_SIGNATURE=signature,
+            HTTP_X_WEBHOOK_TIMESTAMP=timestamp,
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        entitlement = UserEntitlement.objects.get(user=self.user)
+        self.assertEqual(entitlement.parser_credits, 1)
 
     def test_get_my_entitlements(self):
         UserEntitlement.objects.create(
