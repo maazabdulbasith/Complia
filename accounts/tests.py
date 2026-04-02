@@ -1,4 +1,8 @@
+import hashlib
+import hmac
+import json
 from django.test import TestCase, override_settings
+from django.core.management import call_command
 from rest_framework import status
 from rest_framework.test import APITestCase
 from unittest.mock import Mock, patch
@@ -9,7 +13,11 @@ from .models import (
     AssistedIntent,
     CAHelpRequest,
     ExperimentExposure,
+    PaymentOrder,
+    PaymentPlan,
+    PaymentTransaction,
     User,
+    UserEntitlement,
     WeeklyKpiSnapshot,
 )
 
@@ -197,6 +205,20 @@ class SuperAdminCARequestOpsTests(APITestCase):
         self.assertEqual(self.request_item.internal_notes, "Called customer")
         self.assertIsNotNone(self.request_item.contacted_at)
 
+    def test_admin_can_export_ca_requests_csv(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get("/api/v1/admin/exports/ca_requests/?status=new")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("text/csv", response["Content-Type"])
+        csv_text = response.content.decode("utf-8")
+        self.assertIn("notice_code", csv_text)
+        self.assertIn("GST-DRC-01", csv_text)
+
+    def test_non_admin_cannot_export_csv(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get("/api/v1/admin/exports/ca_requests/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
 
 class SuperAdminFunnelAndKpiTests(APITestCase):
     def setUp(self):
@@ -326,3 +348,370 @@ class AssistedIntentAndExperimentTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["enabled"])
         self.assertEqual(response.data["offer"]["key"], "assisted_response_pack_v1")
+
+
+class PaymentsPhase3ATests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email="payer@complia.in", password="pass123456")
+        self.admin = User.objects.create_user(email="admin@complia.in", password="pass123456", user_type="admin")
+        self.plan, _ = PaymentPlan.objects.get_or_create(
+            key="single_use_notice_parse",
+            defaults={
+                "name": "Single Use Parse",
+                "amount_paise": 900,
+                "currency": "INR",
+                "credits": 1,
+                "is_active": True,
+                "is_default": True,
+            },
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_list_payment_plans(self):
+        response = self.client.get("/api/v1/payments/plans/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(response.data), 1)
+
+    def test_create_payment_order_invalid_plan(self):
+        response = self.client.post("/api/v1/payments/orders/", {"plan_key": "invalid_key"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["status"], "error")
+
+    @override_settings(CASHFREE_APP_ID="", CASHFREE_SECRET_KEY="", DEBUG=False)
+    def test_create_payment_order_fails_when_provider_not_configured(self):
+        response = self.client.post(
+            "/api/v1/payments/orders/",
+            {"plan_key": "single_use_notice_parse"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(response.data["code"], "payment_provider_not_configured")
+
+    @override_settings(CASHFREE_APP_ID="cf_app_test", CASHFREE_SECRET_KEY="cf_secret_test")
+    @patch("accounts.views.requests.post")
+    def test_create_payment_order_success(self, mock_post):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "order_id": "cmp-provider-123",
+            "payment_session_id": "session_123",
+            "order_meta": {"payment_link": "https://payments.example/checkout"},
+        }
+        mock_post.return_value = mock_response
+
+        response = self.client.post(
+            "/api/v1/payments/orders/",
+            {"plan_key": "single_use_notice_parse"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["status"], "payment_pending")
+        self.assertEqual(response.data["payment_session_id"], "session_123")
+
+    @override_settings(CASHFREE_WEBHOOK_SECRET="whsec_test")
+    def test_cashfree_webhook_rejects_invalid_signature(self):
+        payment_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-webhook-001",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="payment_pending",
+        )
+        payload = {
+            "type": "PAYMENT_SUCCESS_WEBHOOK",
+            "data": {
+                "order": {"order_id": payment_order.order_id},
+                "payment": {"cf_payment_id": "123", "payment_status": "SUCCESS"},
+            },
+        }
+        response = self.client.post(
+            "/api/v1/payments/webhooks/cashfree/",
+            data=json.dumps(payload),
+            content_type="application/json",
+            HTTP_X_WEBHOOK_SIGNATURE="invalid",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @override_settings(CASHFREE_WEBHOOK_SECRET="whsec_test")
+    def test_cashfree_webhook_idempotent_credit_grant(self):
+        payment_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-webhook-002",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="payment_pending",
+        )
+        payload = {
+            "type": "PAYMENT_SUCCESS_WEBHOOK",
+            "data": {
+                "order": {"order_id": payment_order.order_id},
+                "payment": {"cf_payment_id": "cfpay_001", "payment_status": "SUCCESS"},
+            },
+        }
+        payload_json = json.dumps(payload)
+        signature = hmac.new(
+            b"whsec_test",
+            payload_json.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        first = self.client.post(
+            "/api/v1/payments/webhooks/cashfree/",
+            data=payload_json,
+            content_type="application/json",
+            HTTP_X_WEBHOOK_SIGNATURE=signature,
+        )
+        second = self.client.post(
+            "/api/v1/payments/webhooks/cashfree/",
+            data=payload_json,
+            content_type="application/json",
+            HTTP_X_WEBHOOK_SIGNATURE=signature,
+        )
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+
+        entitlement = UserEntitlement.objects.get(user=self.user)
+        self.assertEqual(entitlement.parser_credits, 1)
+        self.assertEqual(entitlement.lifetime_purchased_credits, 1)
+        self.assertEqual(PaymentTransaction.objects.count(), 1)
+
+    def test_get_my_entitlements(self):
+        UserEntitlement.objects.create(
+            user=self.user,
+            parser_credits=2,
+            lifetime_purchased_credits=3,
+            lifetime_consumed_credits=1,
+        )
+        response = self.client.get("/api/v1/payments/me/entitlements/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["parser_credits"], 2)
+
+    @override_settings(TEST_PAYMENT_API_ENABLED=False)
+    def test_test_payment_confirm_disabled_when_flag_off(self):
+        payment_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-test-disabled-001",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="payment_pending",
+        )
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post(
+            "/api/v1/payments/test/confirm/",
+            {"order_id": payment_order.order_id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "test_payment_api_disabled")
+
+    @override_settings(TEST_PAYMENT_API_ENABLED=True)
+    def test_test_payment_confirm_requires_superadmin(self):
+        payment_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-test-auth-001",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="payment_pending",
+        )
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            "/api/v1/payments/test/confirm/",
+            {"order_id": payment_order.order_id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(TEST_PAYMENT_API_ENABLED=True)
+    def test_test_payment_confirm_grants_credit_idempotently(self):
+        payment_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-test-success-001",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="payment_pending",
+        )
+        self.client.force_authenticate(user=self.admin)
+
+        first = self.client.post(
+            "/api/v1/payments/test/confirm/",
+            {"order_id": payment_order.order_id, "provider_payment_id": "testpay_01"},
+            format="json",
+        )
+        second = self.client.post(
+            "/api/v1/payments/test/confirm/",
+            {"order_id": payment_order.order_id, "provider_payment_id": "testpay_01"},
+            format="json",
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(first.data["duplicate"], False)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.data["duplicate"], True)
+
+        entitlement = UserEntitlement.objects.get(user=self.user)
+        self.assertEqual(entitlement.parser_credits, 1)
+        self.assertEqual(entitlement.lifetime_purchased_credits, 1)
+
+    @override_settings(TEST_PAYMENT_API_ENABLED=True)
+    def test_test_payment_confirm_can_create_and_pay_order(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post(
+            "/api/v1/payments/test/confirm/",
+            {"plan_key": "single_use_notice_parse", "user_email": self.user.email},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "ok")
+        self.assertIn("order", response.data)
+        self.assertEqual(response.data["order"]["status"], "paid")
+
+        entitlement = UserEntitlement.objects.get(user=self.user)
+        self.assertEqual(entitlement.parser_credits, 1)
+
+    def test_admin_can_retry_credit_grant_for_paid_order(self):
+        payment_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-retry-credit-001",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="paid",
+            credit_granted_at=None,
+        )
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post(f"/api/v1/admin/payments/{payment_order.order_id}/grant-credits/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["duplicate"])
+
+        entitlement = UserEntitlement.objects.get(user=self.user)
+        self.assertEqual(entitlement.parser_credits, 1)
+        payment_order.refresh_from_db()
+        self.assertIsNotNone(payment_order.credit_granted_at)
+
+    def test_admin_retry_credit_grant_rejects_ineligible_order(self):
+        payment_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-retry-credit-002",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="payment_pending",
+        )
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post(f"/api/v1/admin/payments/{payment_order.order_id}/grant-credits/")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "order_not_eligible")
+
+    def test_non_admin_cannot_retry_credit_grant(self):
+        payment_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-retry-credit-003",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="paid",
+        )
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(f"/api/v1/admin/payments/{payment_order.order_id}/grant-credits/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_reconcile_payment_orders_command_grants_missing_credits(self):
+        payment_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-reconcile-001",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="payment_pending",
+        )
+        PaymentTransaction.objects.create(
+            payment_order=payment_order,
+            provider_payment_id="cfpay-reconcile-001",
+            provider_status="SUCCESS",
+            idempotency_key="reconcile:cmp-reconcile-001:1",
+            signature_verified=True,
+            payload={"source": "test"},
+        )
+
+        call_command("reconcile_payment_orders", "--order-id", payment_order.order_id)
+        entitlement = UserEntitlement.objects.get(user=self.user)
+        self.assertEqual(entitlement.parser_credits, 1)
+        payment_order.refresh_from_db()
+        self.assertEqual(payment_order.status, "paid")
+        self.assertIsNotNone(payment_order.credit_granted_at)
+
+    def test_reconcile_payment_orders_dry_run_does_not_grant(self):
+        payment_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-reconcile-002",
+            provider="cashfree",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="paid",
+            credit_granted_at=None,
+        )
+        call_command("reconcile_payment_orders", "--order-id", payment_order.order_id, "--dry-run")
+        self.assertFalse(UserEntitlement.objects.filter(user=self.user).exists())
+
+
+class SuperAdminCsvExportTests(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(email="admin-export@complia.in", password="pass123456", user_type="admin")
+
+    def test_export_unknown_report_key_returns_400(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get("/api/v1/admin/exports/unknown_report/")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_feedback_csv_export_contains_feedback_rows(self):
+        from complia_backend.notices.models import NoticeFeedback, NoticeType
+
+        notice = NoticeType.objects.create(
+            code="TEST-FB-001",
+            title="Feedback Notice",
+            summary="Summary",
+            detailed_explanation="Detailed",
+            consequences_of_ignoring="Risk",
+            next_steps="Next",
+            severity="medium",
+            is_active=True,
+        )
+        NoticeFeedback.objects.create(
+            notice=notice,
+            is_helpful=True,
+            comments="Helpful content",
+            status="new",
+        )
+
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get("/api/v1/admin/exports/feedback/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("text/csv", response["Content-Type"])
+        csv_text = response.content.decode("utf-8")
+        self.assertIn("TEST-FB-001", csv_text)
+        self.assertIn("Helpful content", csv_text)

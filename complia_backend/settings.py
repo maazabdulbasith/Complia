@@ -11,7 +11,8 @@ from pathlib import Path
 import dj_database_url
 from dotenv import load_dotenv
 
-load_dotenv()
+# Ensure local `.env` values take precedence over stale shell/session vars.
+load_dotenv(override=True)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 TESTING = "test" in sys.argv
@@ -41,10 +42,24 @@ PARSER_PRIVATE_BETA_ENABLED = os.getenv("PARSER_PRIVATE_BETA_ENABLED", "false").
 PARSER_REVIEW_THRESHOLD = float(os.getenv("PARSER_REVIEW_THRESHOLD", "0.75"))
 PARSER_EPHEMERAL_TTL_HOURS = int(os.getenv("PARSER_EPHEMERAL_TTL_HOURS", "1"))
 PARSER_MAX_UPLOAD_MB = int(os.getenv("PARSER_MAX_UPLOAD_MB", "10"))
+OCR_ENABLED = os.getenv("OCR_ENABLED", "false").lower() in ("true", "1", "yes")
+OCR_PROVIDER = os.getenv("OCR_PROVIDER", "azure_vision").strip().lower()
+GOOGLE_VISION_API_KEY = os.getenv("GOOGLE_VISION_API_KEY", "").strip()
+AZURE_VISION_API_KEY = os.getenv("AZURE_VISION_API_KEY", "").strip()
+AZURE_VISION_ENDPOINT = os.getenv("AZURE_VISION_ENDPOINT", "").strip().rstrip("/")
+OCR_MAX_PAGES = int(os.getenv("OCR_MAX_PAGES", "3"))
+OCR_MIN_TEXT_CHARS = int(os.getenv("OCR_MIN_TEXT_CHARS", "80"))
+OCR_REQUEST_TIMEOUT_SEC = int(os.getenv("OCR_REQUEST_TIMEOUT_SEC", "20"))
 ASSISTED_OFFER_ENABLED = os.getenv("ASSISTED_OFFER_ENABLED", "true").lower() in ("true", "1", "yes")
 ASSISTED_OFFER_DEFAULT_KEY = os.getenv("ASSISTED_OFFER_DEFAULT_KEY", "assisted_response_pack_v1")
 ASSISTED_OFFER_TARGET_SEVERITY = os.getenv("ASSISTED_OFFER_TARGET_SEVERITY", "high").strip().lower()
 PUBLIC_SITE_URL = os.getenv("PUBLIC_SITE_URL", "").strip().rstrip("/")
+CASHFREE_APP_ID = os.getenv("CASHFREE_APP_ID", "").strip()
+CASHFREE_SECRET_KEY = os.getenv("CASHFREE_SECRET_KEY", "").strip()
+CASHFREE_ENV = os.getenv("CASHFREE_ENV", "sandbox").strip().lower()
+CASHFREE_WEBHOOK_SECRET = os.getenv("CASHFREE_WEBHOOK_SECRET", "").strip()
+CASHFREE_RETURN_URL = os.getenv("CASHFREE_RETURN_URL", "").strip()
+TEST_PAYMENT_API_ENABLED = os.getenv("TEST_PAYMENT_API_ENABLED", "false").lower() in ("true", "1", "yes")
 
 
 # ==============================

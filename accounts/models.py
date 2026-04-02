@@ -120,6 +120,13 @@ class AnalyticsEvent(models.Model):
         ("ca_help_submitted", "CA Help Submitted"),
         ("assisted_offer_seen", "Assisted Offer Seen"),
         ("assisted_offer_clicked", "Assisted Offer Clicked"),
+        ("payment_plan_viewed", "Payment Plan Viewed"),
+        ("payment_order_created", "Payment Order Created"),
+        ("payment_checkout_opened", "Payment Checkout Opened"),
+        ("payment_success", "Payment Success"),
+        ("payment_failed", "Payment Failed"),
+        ("credit_consumed", "Credit Consumed"),
+        ("paid_parser_result_viewed", "Paid Parser Result Viewed"),
         ("admin_dashboard_viewed", "Admin Dashboard Viewed"),
         ("admin_dashboard_heartbeat", "Admin Dashboard Heartbeat"),
         ("admin_ca_request_updated", "Admin CA Request Updated"),
@@ -258,3 +265,106 @@ class WeeklyKpiSnapshot(models.Model):
 
     def __str__(self):
         return f"Week of {self.week_start}"
+
+
+class PaymentPlan(models.Model):
+    key = models.CharField(max_length=80, unique=True)
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    amount_paise = models.PositiveIntegerField(default=900)
+    currency = models.CharField(max_length=10, default="INR")
+    credits = models.PositiveIntegerField(default=1)
+    is_active = models.BooleanField(default=True, db_index=True)
+    is_default = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["amount_paise", "key"]
+
+    def __str__(self):
+        return f"{self.key} ({self.amount_paise} paise)"
+
+
+class PaymentOrder(models.Model):
+    STATUS_CHOICES = (
+        ("created", "Created"),
+        ("payment_pending", "Payment Pending"),
+        ("paid", "Paid"),
+        ("failed", "Failed"),
+        ("cancelled", "Cancelled"),
+    )
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="payment_orders",
+    )
+    plan = models.ForeignKey(
+        PaymentPlan,
+        on_delete=models.PROTECT,
+        related_name="orders",
+    )
+    order_id = models.CharField(max_length=80, unique=True, db_index=True)
+    provider = models.CharField(max_length=40, default="cashfree")
+    provider_order_id = models.CharField(max_length=120, blank=True, db_index=True)
+    payment_session_id = models.CharField(max_length=180, blank=True)
+    checkout_url = models.URLField(blank=True)
+    amount_paise = models.PositiveIntegerField()
+    currency = models.CharField(max_length=10, default="INR")
+    credits = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="created", db_index=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    credit_granted_at = models.DateTimeField(null=True, blank=True)
+    failure_reason = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.order_id} ({self.status})"
+
+
+class PaymentTransaction(models.Model):
+    payment_order = models.ForeignKey(
+        PaymentOrder,
+        on_delete=models.CASCADE,
+        related_name="transactions",
+    )
+    provider_payment_id = models.CharField(max_length=120, blank=True, db_index=True)
+    provider_status = models.CharField(max_length=60, blank=True)
+    idempotency_key = models.CharField(max_length=200, unique=True)
+    signature_verified = models.BooleanField(default=False)
+    payload = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.idempotency_key}"
+
+
+class UserEntitlement(models.Model):
+    user = models.OneToOneField(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="entitlement",
+    )
+    parser_credits = models.PositiveIntegerField(default=0)
+    lifetime_purchased_credits = models.PositiveIntegerField(default=0)
+    lifetime_consumed_credits = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.user.email} credits={self.parser_credits}"

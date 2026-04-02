@@ -1,9 +1,17 @@
-﻿from datetime import timedelta
+import hashlib
+import hmac
+import json
+import uuid
+import csv
+from datetime import timedelta
+from io import StringIO
 
-from django.conf import settings
-from django.db.models import Count
-from django.utils import timezone
 import requests
+from django.conf import settings
+from django.db.models import Count, Q
+from django.http import HttpResponse
+from django.utils import timezone
+from django.utils.crypto import constant_time_compare
 from rest_framework import filters, generics, mixins, permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -16,10 +24,15 @@ from .models import (
     AssistedIntent,
     CAHelpRequest,
     ExperimentExposure,
+    PaymentOrder,
+    PaymentPlan,
+    PaymentTransaction,
     User,
+    UserEntitlement,
     WeeklyKpiSnapshot,
 )
 from .permissions import IsSuperAdmin
+from .payment_ops import grant_parser_credits_once, is_failure_status, is_order_credit_eligible, is_success_status
 from .serializers import (
     AdminAssistedIntentSerializer,
     AdminCAHelpRequestSerializer,
@@ -28,7 +41,12 @@ from .serializers import (
     AssistedIntentSerializer,
     CAHelpRequestSerializer,
     ExperimentExposureSerializer,
+    PaymentOrderCreateSerializer,
+    PaymentOrderSerializer,
+    PaymentPlanSerializer,
+    PaymentTestConfirmSerializer,
     UserDetailSerializer,
+    UserEntitlementSerializer,
     WeeklyKpiSnapshotSerializer,
 )
 
@@ -113,6 +131,81 @@ def _ensure_weekly_snapshot() -> WeeklyKpiSnapshot:
         },
     )
     return snapshot
+
+
+def _ensure_default_payment_plan() -> PaymentPlan:
+    default_key = "single_use_notice_parse"
+    plan = PaymentPlan.objects.filter(key=default_key).first()
+    if plan:
+        if not plan.is_active:
+            plan.is_active = True
+            plan.save(update_fields=["is_active", "updated_at"])
+        return plan
+
+    return PaymentPlan.objects.create(
+        key=default_key,
+        name="Single Notice Parse",
+        description="Upload one tax notice and unlock one parser result.",
+        amount_paise=900,
+        currency="INR",
+        credits=1,
+        is_active=True,
+        is_default=True,
+    )
+
+
+def _cashfree_base_url() -> str:
+    env = getattr(settings, "CASHFREE_ENV", "sandbox").strip().lower()
+    if env == "production":
+        return "https://api.cashfree.com/pg/orders"
+    return "https://sandbox.cashfree.com/pg/orders"
+
+
+def _cashfree_headers() -> dict:
+    return {
+        "x-client-id": settings.CASHFREE_APP_ID,
+        "x-client-secret": settings.CASHFREE_SECRET_KEY,
+        "x-api-version": "2023-08-01",
+        "content-type": "application/json",
+    }
+
+
+def _cashfree_signature_valid(raw_body: bytes, signature: str, timestamp: str = "") -> bool:
+    if not settings.CASHFREE_WEBHOOK_SECRET:
+        return False
+    if not signature:
+        return False
+
+    digest_hex = hmac.new(
+        settings.CASHFREE_WEBHOOK_SECRET.encode("utf-8"),
+        raw_body,
+        hashlib.sha256,
+    ).hexdigest()
+    if constant_time_compare(signature, digest_hex):
+        return True
+
+    if timestamp:
+        timestamp_payload = f"{timestamp}{raw_body.decode('utf-8')}".encode("utf-8")
+        digest_with_timestamp = hmac.new(
+            settings.CASHFREE_WEBHOOK_SECRET.encode("utf-8"),
+            timestamp_payload,
+            hashlib.sha256,
+        ).hexdigest()
+        if constant_time_compare(signature, digest_with_timestamp):
+            return True
+    return False
+
+
+def _csv_response(filename: str, headers: list[str], rows: list[list[str]]) -> HttpResponse:
+    buffer = StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow(row)
+
+    response = HttpResponse(buffer.getvalue(), content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 class GoogleLogin(APIView):
@@ -277,6 +370,458 @@ class ExperimentExposureCreateView(generics.CreateAPIView):
         return Response(output.data, status=status.HTTP_201_CREATED)
 
 
+class PaymentPlanListView(generics.GenericAPIView):
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "analytics_event"
+
+    def get(self, request):
+        _ensure_default_payment_plan()
+        plans = PaymentPlan.objects.filter(is_active=True).order_by("amount_paise", "key")
+        return Response(PaymentPlanSerializer(plans, many=True).data)
+
+
+class PaymentOrderCreateView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "assisted_intent"
+    serializer_class = PaymentOrderCreateSerializer
+
+    def post(self, request):
+        _ensure_default_payment_plan()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        plan_key = serializer.validated_data["plan_key"]
+
+        plan = PaymentPlan.objects.filter(key=plan_key, is_active=True).first()
+        if not plan:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Selected plan is not available.",
+                    "code": "invalid_plan",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        order_id = f"cmp-{uuid.uuid4().hex[:24]}"
+        amount_inr = round(plan.amount_paise / 100.0, 2)
+        customer_phone = (request.user.phone_number or "").strip() or "9999999999"
+        return_url = getattr(settings, "CASHFREE_RETURN_URL", "").strip()
+        if not return_url:
+            return_url = f"{getattr(settings, 'PUBLIC_SITE_URL', '').rstrip('/')}/parser"
+
+        payload = {
+            "order_id": order_id,
+            "order_amount": amount_inr,
+            "order_currency": plan.currency,
+            "customer_details": {
+                "customer_id": str(request.user.id),
+                "customer_email": request.user.email,
+                "customer_phone": customer_phone,
+            },
+            "order_meta": {
+                "return_url": f"{return_url}?order_id={order_id}",
+            },
+            "order_note": f"Complia {plan.key}",
+        }
+
+        payment_order = PaymentOrder.objects.create(
+            user=request.user,
+            plan=plan,
+            order_id=order_id,
+            provider="cashfree",
+            amount_paise=plan.amount_paise,
+            currency=plan.currency,
+            credits=plan.credits,
+            status="created",
+            metadata={"request_payload": payload},
+        )
+
+        credentials_ready = bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY)
+        if not credentials_ready and settings.DEBUG:
+            payment_order.status = "payment_pending"
+            payment_order.payment_session_id = f"sandbox_session_{payment_order.order_id}"
+            payment_order.provider_order_id = payment_order.order_id
+            payment_order.save(update_fields=["status", "payment_session_id", "provider_order_id", "updated_at"])
+            return Response(PaymentOrderSerializer(payment_order).data, status=status.HTTP_201_CREATED)
+        if not credentials_ready:
+            payment_order.status = "failed"
+            payment_order.failure_reason = "Cashfree credentials are not configured."
+            payment_order.save(update_fields=["status", "failure_reason", "updated_at"])
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Payment provider is not configured.",
+                    "code": "payment_provider_not_configured",
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        try:
+            cf_response = requests.post(
+                _cashfree_base_url(),
+                headers=_cashfree_headers(),
+                data=json.dumps(payload),
+                timeout=15,
+            )
+        except requests.RequestException:
+            payment_order.status = "failed"
+            payment_order.failure_reason = "Could not connect to Cashfree."
+            payment_order.save(update_fields=["status", "failure_reason", "updated_at"])
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Could not create payment order.",
+                    "code": "payment_provider_unavailable",
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        if cf_response.status_code not in {200, 201}:
+            payment_order.status = "failed"
+            payment_order.failure_reason = f"Cashfree order creation failed ({cf_response.status_code})."
+            payment_order.save(update_fields=["status", "failure_reason", "updated_at"])
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Payment provider rejected the request.",
+                    "code": "payment_provider_error",
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        try:
+            response_data = cf_response.json()
+        except ValueError:
+            payment_order.status = "failed"
+            payment_order.failure_reason = "Cashfree returned an invalid JSON response."
+            payment_order.save(update_fields=["status", "failure_reason", "updated_at"])
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Payment provider returned an invalid response.",
+                    "code": "payment_provider_invalid_response",
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        payment_order.provider_order_id = response_data.get("order_id", "")
+        payment_order.payment_session_id = response_data.get("payment_session_id", "")
+        payment_order.checkout_url = response_data.get("order_meta", {}).get("payment_link", "")
+        payment_order.status = "payment_pending"
+        payment_order.metadata = {
+            "request_payload": payload,
+            "cashfree_response": response_data,
+        }
+        payment_order.save(
+            update_fields=[
+                "provider_order_id",
+                "payment_session_id",
+                "checkout_url",
+                "status",
+                "metadata",
+                "updated_at",
+            ]
+        )
+        return Response(PaymentOrderSerializer(payment_order).data, status=status.HTTP_201_CREATED)
+
+
+class PaymentTestConfirmView(generics.GenericAPIView):
+    permission_classes = [IsSuperAdmin]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "admin_ops"
+    serializer_class = PaymentTestConfirmSerializer
+
+    def post(self, request):
+        if not settings.TEST_PAYMENT_API_ENABLED:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Test payment API is disabled.",
+                    "code": "test_payment_api_disabled",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        order_id = serializer.validated_data.get("order_id", "")
+        plan_key = serializer.validated_data.get("plan_key", "")
+        user_email = serializer.validated_data.get("user_email", "")
+        provider_payment_id = serializer.validated_data.get("provider_payment_id", "").strip()
+        provider_status = "SUCCESS"
+
+        payment_order = None
+        if order_id:
+            payment_order = PaymentOrder.objects.filter(order_id=order_id).first()
+            if not payment_order:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Payment order not found.",
+                        "code": "order_not_found",
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        else:
+            plan = PaymentPlan.objects.filter(key=plan_key, is_active=True).first()
+            if not plan:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Selected plan is not available.",
+                        "code": "invalid_plan",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            target_user = request.user
+            if user_email:
+                target_user = User.objects.filter(email__iexact=user_email).first()
+                if not target_user:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Target user not found.",
+                            "code": "user_not_found",
+                        },
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+
+            generated_order_id = f"test-{uuid.uuid4().hex[:24]}"
+            payment_order = PaymentOrder.objects.create(
+                user=target_user,
+                plan=plan,
+                order_id=generated_order_id,
+                provider="cashfree",
+                provider_order_id=generated_order_id,
+                amount_paise=plan.amount_paise,
+                currency=plan.currency,
+                credits=plan.credits,
+                status="payment_pending",
+                metadata={"source": "test_payment_api"},
+            )
+
+        idempotency_key = f"test:{payment_order.order_id}:{provider_payment_id or 'no-payment-id'}:{provider_status}"
+        transaction_row, created = PaymentTransaction.objects.get_or_create(
+            idempotency_key=idempotency_key,
+            defaults={
+                "payment_order": payment_order,
+                "provider_payment_id": provider_payment_id,
+                "provider_status": provider_status,
+                "signature_verified": True,
+                "payload": {
+                    "source": "test_api",
+                    "order_id": payment_order.order_id,
+                    "provider_payment_id": provider_payment_id,
+                    "provider_status": provider_status,
+                },
+                "processed_at": timezone.now(),
+            },
+        )
+
+        if created:
+            grant_parser_credits_once(payment_order)
+            AnalyticsEvent.objects.create(
+                user=payment_order.user,
+                session_id=f"test-pay-{payment_order.order_id}",
+                event_name="payment_success",
+                path="/payments/test-confirm",
+                metadata={"order_id": payment_order.order_id, "plan_key": payment_order.plan.key},
+            )
+
+        transaction_row.processed_at = timezone.now()
+        transaction_row.save(update_fields=["processed_at"])
+
+        payment_order.refresh_from_db()
+        return Response(
+            {
+                "status": "ok",
+                "duplicate": not created,
+                "order": PaymentOrderSerializer(payment_order).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class CashfreeWebhookView(generics.GenericAPIView):
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "analytics_event"
+
+    def post(self, request):
+        signature = (
+            request.headers.get("x-webhook-signature")
+            or request.headers.get("x-cf-signature")
+            or request.headers.get("x-signature")
+            or ""
+        ).strip()
+        timestamp = (request.headers.get("x-webhook-timestamp") or "").strip()
+        raw_body = request.body or b""
+
+        if not _cashfree_signature_valid(raw_body, signature, timestamp):
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Invalid webhook signature.",
+                    "code": "invalid_signature",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payload = request.data or {}
+        data = payload.get("data", {})
+        order_data = data.get("order", {})
+        payment_data = data.get("payment", {})
+
+        provider_order_id = (
+            order_data.get("order_id")
+            or payload.get("order_id")
+            or payload.get("cf_order_id")
+            or ""
+        ).strip()
+        provider_payment_id = (
+            payment_data.get("cf_payment_id")
+            or payment_data.get("payment_id")
+            or payload.get("cf_payment_id")
+            or ""
+        ).strip()
+        provider_status = (
+            payment_data.get("payment_status")
+            or order_data.get("order_status")
+            or payload.get("payment_status")
+            or payload.get("order_status")
+            or payload.get("type")
+            or ""
+        ).strip()
+
+        if not provider_order_id:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Missing order reference.",
+                    "code": "missing_order_id",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payment_order = PaymentOrder.objects.filter(
+            Q(order_id=provider_order_id) | Q(provider_order_id=provider_order_id)
+        ).first()
+        if not payment_order:
+            return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+        idempotency_key = f"{provider_order_id}:{provider_payment_id or 'no-payment-id'}:{provider_status or 'unknown'}"
+        transaction_row, created = PaymentTransaction.objects.get_or_create(
+            idempotency_key=idempotency_key,
+            defaults={
+                "payment_order": payment_order,
+                "provider_payment_id": provider_payment_id,
+                "provider_status": provider_status,
+                "signature_verified": True,
+                "payload": payload,
+                "processed_at": timezone.now(),
+            },
+        )
+
+        if not created:
+            return Response({"status": "ok", "duplicate": True}, status=status.HTTP_200_OK)
+
+        if is_success_status(provider_status):
+            grant_parser_credits_once(payment_order)
+            AnalyticsEvent.objects.create(
+                user=payment_order.user,
+                session_id=f"pay-{payment_order.order_id}",
+                event_name="payment_success",
+                path="/payments/webhook",
+                metadata={"order_id": payment_order.order_id, "plan_key": payment_order.plan.key},
+            )
+        elif is_failure_status(provider_status):
+            payment_order.status = "failed"
+            payment_order.failure_reason = provider_status or "Payment failed"
+            payment_order.save(update_fields=["status", "failure_reason", "updated_at"])
+            AnalyticsEvent.objects.create(
+                user=payment_order.user,
+                session_id=f"pay-{payment_order.order_id}",
+                event_name="payment_failed",
+                path="/payments/webhook",
+                metadata={"order_id": payment_order.order_id, "plan_key": payment_order.plan.key},
+            )
+        else:
+            payment_order.status = "payment_pending"
+            payment_order.save(update_fields=["status", "updated_at"])
+
+        transaction_row.processed_at = timezone.now()
+        transaction_row.save(update_fields=["processed_at"])
+        return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+
+class MyEntitlementsView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "analytics_event"
+
+    def get(self, request):
+        entitlement, _ = UserEntitlement.objects.get_or_create(
+            user=request.user,
+            defaults={
+                "parser_credits": 0,
+                "lifetime_purchased_credits": 0,
+                "lifetime_consumed_credits": 0,
+            },
+        )
+        return Response(UserEntitlementSerializer(entitlement).data)
+
+
+class PaymentOrderGrantCreditsView(generics.GenericAPIView):
+    permission_classes = [IsSuperAdmin]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "admin_ops"
+
+    def post(self, request, order_id: str):
+        payment_order = PaymentOrder.objects.filter(order_id=order_id).first()
+        if not payment_order:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Payment order not found.",
+                    "code": "order_not_found",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not is_order_credit_eligible(payment_order):
+            payment_order.refresh_from_db()
+            if payment_order.credit_granted_at:
+                return Response(
+                    {
+                        "status": "ok",
+                        "duplicate": True,
+                        "order": PaymentOrderSerializer(payment_order).data,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Order is not eligible for credit grant.",
+                    "code": "order_not_eligible",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        grant_parser_credits_once(payment_order)
+        payment_order.refresh_from_db()
+        return Response(
+            {
+                "status": "ok",
+                "duplicate": False,
+                "order": PaymentOrderSerializer(payment_order).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class SuperAdminMetricsView(generics.GenericAPIView):
     permission_classes = [IsSuperAdmin]
     throttle_classes = [ScopedRateThrottle]
@@ -361,6 +906,192 @@ class SuperAdminKpiView(generics.GenericAPIView):
                 "current": _compute_kpi_metrics(window),
                 "weekly_snapshots": WeeklyKpiSnapshotSerializer(snapshots, many=True).data,
             }
+        )
+
+
+class SuperAdminCsvExportView(generics.GenericAPIView):
+    permission_classes = [IsSuperAdmin]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "admin_ops"
+
+    def get(self, request, report_key: str):
+        report_key = (report_key or "").strip().lower()
+        if report_key == "ca_requests":
+            return self._export_ca_requests(request)
+        if report_key == "assisted_intents":
+            return self._export_assisted_intents(request)
+        if report_key == "feedback":
+            return self._export_feedback(request)
+        if report_key == "notice_qa":
+            return self._export_notice_qa(request)
+        if report_key == "parser_jobs":
+            return self._export_parser_jobs(request)
+        return Response(
+            {"detail": "Unknown report key."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    def _export_ca_requests(self, request):
+        queryset = CAHelpRequest.objects.all().order_by("-created_at")
+        status_filter = (request.query_params.get("status") or "").strip()
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        rows = [
+            [
+                str(item.id),
+                item.notice_code,
+                item.name,
+                item.email,
+                item.phone_number or "",
+                item.status,
+                item.priority,
+                item.assigned_to_email or "",
+                item.created_at.isoformat(),
+            ]
+            for item in queryset
+        ]
+        return _csv_response(
+            "complia_ca_requests.csv",
+            ["id", "notice_code", "name", "email", "phone_number", "status", "priority", "assigned_to", "created_at"],
+            rows,
+        )
+
+    def _export_assisted_intents(self, request):
+        queryset = AssistedIntent.objects.select_related("notice", "offer").all().order_by("-created_at")
+        status_filter = (request.query_params.get("status") or "").strip()
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        rows = [
+            [
+                str(item.id),
+                item.notice_code_snapshot or "",
+                item.notice.title if item.notice else "",
+                item.name or "",
+                item.email or "",
+                item.phone_number or "",
+                item.status,
+                item.experiment_key or "",
+                item.experiment_variant or "",
+                item.created_at.isoformat(),
+            ]
+            for item in queryset
+        ]
+        return _csv_response(
+            "complia_assisted_intents.csv",
+            [
+                "id",
+                "notice_code_snapshot",
+                "notice_title",
+                "name",
+                "email",
+                "phone_number",
+                "status",
+                "experiment_key",
+                "experiment_variant",
+                "created_at",
+            ],
+            rows,
+        )
+
+    def _export_feedback(self, request):
+        from complia_backend.notices.models import NoticeFeedback
+
+        queryset = NoticeFeedback.objects.select_related("notice").all().order_by("-created_at")
+        status_filter = (request.query_params.get("status") or "").strip()
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        rows = [
+            [
+                str(item.id),
+                item.notice.code if item.notice else "",
+                item.notice.title if item.notice else "",
+                "yes" if item.is_helpful else "no",
+                item.status,
+                (item.comments or "").replace("\n", " ").strip(),
+                item.created_at.isoformat(),
+            ]
+            for item in queryset
+        ]
+        return _csv_response(
+            "complia_feedback.csv",
+            ["id", "notice_code", "notice_title", "is_helpful", "status", "comments", "created_at"],
+            rows,
+        )
+
+    def _export_notice_qa(self, request):
+        from complia_backend.notices.models import NoticeType
+
+        queryset = NoticeType.objects.all().order_by("code")
+        status_filter = (request.query_params.get("status") or "").strip()
+        if status_filter == "stale":
+            stale_cutoff = timezone.now() - timedelta(days=90)
+            queryset = queryset.filter(verified_at__lt=stale_cutoff)
+        elif status_filter == "unverified":
+            queryset = queryset.filter(verified_at__isnull=True)
+
+        rows = [
+            [
+                str(item.id),
+                item.code,
+                item.title,
+                item.severity,
+                "yes" if item.is_active else "no",
+                item.verified_by or "",
+                item.verified_at.isoformat() if item.verified_at else "",
+                item.updated_at.isoformat(),
+            ]
+            for item in queryset
+        ]
+        return _csv_response(
+            "complia_notice_qa.csv",
+            ["id", "code", "title", "severity", "is_active", "verified_by", "verified_at", "updated_at"],
+            rows,
+        )
+
+    def _export_parser_jobs(self, request):
+        from complia_backend.notices.models import ParserJob
+
+        queryset = ParserJob.objects.select_related("notice", "extraction").all().order_by("-created_at")
+        status_filter = (request.query_params.get("status") or "").strip()
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        rows = []
+        for item in queryset:
+            extraction = getattr(item, "extraction", None)
+            rows.append(
+                [
+                    str(item.id),
+                    item.original_filename,
+                    item.notice.code if item.notice else "",
+                    item.status,
+                    f"{item.confidence:.4f}",
+                    extraction.legal_section if extraction else "",
+                    str(extraction.amount_claimed) if extraction and extraction.amount_claimed is not None else "",
+                    extraction.deadline_date.isoformat() if extraction and extraction.deadline_date else "",
+                    extraction.review_status if extraction else "",
+                    item.created_at.isoformat(),
+                ]
+            )
+
+        return _csv_response(
+            "complia_parser_jobs.csv",
+            [
+                "id",
+                "original_filename",
+                "notice_code",
+                "status",
+                "confidence",
+                "legal_section",
+                "amount_claimed",
+                "deadline_date",
+                "extraction_review_status",
+                "created_at",
+            ],
+            rows,
         )
 
 

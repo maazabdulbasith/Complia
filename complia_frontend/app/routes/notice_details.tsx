@@ -373,6 +373,18 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
               <section className="rounded-2xl border border-slate-200 bg-white p-5">
                 <h3 className="text-sm font-semibold uppercase tracking-[0.13em] text-slate-600">Take action</h3>
                 <div className="mt-3 space-y-2">
+                  <Link
+                    to={`/parser?notice=${encodeURIComponent(notice.code)}`}
+                    onClick={() =>
+                      trackEvent("parser_upload_cta_clicked", {
+                        source_path: `/notice/${notice.code}`,
+                        notice_code: notice.code,
+                      })
+                    }
+                    className="inline-flex w-full items-center justify-center rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-2.5 text-sm font-semibold text-cyan-700 transition hover:bg-cyan-100"
+                  >
+                    Upload Notice & Understand
+                  </Link>
                   <button
                     onClick={handleSaveToggle}
                     disabled={saveLoading}

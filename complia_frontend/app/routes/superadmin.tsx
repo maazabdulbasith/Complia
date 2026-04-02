@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  downloadAdminCsvReport,
   getAdminAssistedIntents,
   getAdminCARequests,
   getAdminFeedbackItems,
@@ -18,6 +19,7 @@ import {
   updateAdminParserJob,
 } from "../api/client";
 import type {
+  AdminCsvReportKey,
   AdminAssistedIntent,
   AdminCARequest,
   AdminFeedbackItem,
@@ -61,6 +63,7 @@ export default function SuperAdminDashboard() {
   const [assistedStatusFilter, setAssistedStatusFilter] = useState<string>("");
   const [noticeQaFilter, setNoticeQaFilter] = useState<"" | "stale" | "unverified">("");
   const [parserStatusFilter, setParserStatusFilter] = useState<string>("");
+  const [exportingReport, setExportingReport] = useState<AdminCsvReportKey | null>(null);
 
   const user = useMemo(() => {
     const raw = localStorage.getItem("user");
@@ -253,6 +256,18 @@ export default function SuperAdminDashboard() {
     }
   };
 
+  const handleCsvExport = async (reportKey: AdminCsvReportKey, statusFilter?: string) => {
+    setExportingReport(reportKey);
+    setError(null);
+    try {
+      await downloadAdminCsvReport(reportKey, statusFilter);
+    } catch {
+      setError("Failed to export CSV. Please retry.");
+    } finally {
+      setExportingReport(null);
+    }
+  };
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-slate-100 via-indigo-50 to-cyan-50 text-slate-900">
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
@@ -382,19 +397,29 @@ export default function SuperAdminDashboard() {
                     {assistedIntents.length}
                   </span>
                 </h2>
-                <select
-                  value={assistedStatusFilter}
-                  onChange={(e) => setAssistedStatusFilter(e.target.value)}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="">All Statuses</option>
-                  <option value="new">New</option>
-                  <option value="triaged">Triaged</option>
-                  <option value="contacted">Contacted</option>
-                  <option value="won">Won</option>
-                  <option value="lost">Lost</option>
-                  <option value="closed">Closed</option>
-                </select>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={assistedStatusFilter}
+                    onChange={(e) => setAssistedStatusFilter(e.target.value)}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="new">New</option>
+                    <option value="triaged">Triaged</option>
+                    <option value="contacted">Contacted</option>
+                    <option value="won">Won</option>
+                    <option value="lost">Lost</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void handleCsvExport("assisted_intents", assistedStatusFilter || undefined)}
+                    disabled={exportingReport === "assisted_intents"}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-60"
+                  >
+                    {exportingReport === "assisted_intents" ? "Exporting..." : "Export CSV"}
+                  </button>
+                </div>
               </div>
               <div className="space-y-4">
                 {assistedIntents.map((item) => (
@@ -453,15 +478,25 @@ export default function SuperAdminDashboard() {
                     {noticeQaItems.length}
                   </span>
                 </h2>
-                <select
-                  value={noticeQaFilter}
-                  onChange={(e) => setNoticeQaFilter(e.target.value as "" | "stale" | "unverified")}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="">All Notices</option>
-                  <option value="unverified">Unverified</option>
-                  <option value="stale">Stale (90+ days)</option>
-                </select>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={noticeQaFilter}
+                    onChange={(e) => setNoticeQaFilter(e.target.value as "" | "stale" | "unverified")}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="">All Notices</option>
+                    <option value="unverified">Unverified</option>
+                    <option value="stale">Stale (90+ days)</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void handleCsvExport("notice_qa", noticeQaFilter || undefined)}
+                    disabled={exportingReport === "notice_qa"}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-60"
+                  >
+                    {exportingReport === "notice_qa" ? "Exporting..." : "Export CSV"}
+                  </button>
+                </div>
               </div>
               <div className="space-y-4">
                 {noticeQaItems.map((item) => (
@@ -538,17 +573,27 @@ export default function SuperAdminDashboard() {
                     {parserJobs.length}
                   </span>
                 </h2>
-                <select
-                  value={parserStatusFilter}
-                  onChange={(e) => setParserStatusFilter(e.target.value)}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="">All statuses</option>
-                  <option value="queued">Queued</option>
-                  <option value="review_required">Review required</option>
-                  <option value="completed">Completed</option>
-                  <option value="failed">Failed</option>
-                </select>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={parserStatusFilter}
+                    onChange={(e) => setParserStatusFilter(e.target.value)}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="">All statuses</option>
+                    <option value="queued">Queued</option>
+                    <option value="review_required">Review required</option>
+                    <option value="completed">Completed</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void handleCsvExport("parser_jobs", parserStatusFilter || undefined)}
+                    disabled={exportingReport === "parser_jobs"}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-60"
+                  >
+                    {exportingReport === "parser_jobs" ? "Exporting..." : "Export CSV"}
+                  </button>
+                </div>
               </div>
 
               {parserBenchmarkRuns[0] && (
@@ -649,20 +694,30 @@ export default function SuperAdminDashboard() {
                     {caRequests.length}
                   </span>
                 </h2>
-                <select
-                  value={caStatusFilter}
-                  onChange={(e) => {
-                    setCAStatusFilter(e.target.value);
-                  }}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="">All Statuses</option>
-                  <option value="new">New</option>
-                  <option value="triaged">Triaged</option>
-                  <option value="contacted">Contacted</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="closed">Closed</option>
-                </select>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={caStatusFilter}
+                    onChange={(e) => {
+                      setCAStatusFilter(e.target.value);
+                    }}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="new">New</option>
+                    <option value="triaged">Triaged</option>
+                    <option value="contacted">Contacted</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void handleCsvExport("ca_requests", caStatusFilter || undefined)}
+                    disabled={exportingReport === "ca_requests"}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-60"
+                  >
+                    {exportingReport === "ca_requests" ? "Exporting..." : "Export CSV"}
+                  </button>
+                </div>
               </div>
               <div className="space-y-4">
                 {caRequests.map((item) => (
@@ -736,18 +791,28 @@ export default function SuperAdminDashboard() {
                     {feedbackItems.length}
                   </span>
                 </h2>
-                <select
-                  value={feedbackStatusFilter}
-                  onChange={(e) => {
-                    setFeedbackStatusFilter(e.target.value);
-                  }}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="">All Statuses</option>
-                  <option value="new">New</option>
-                  <option value="reviewed">Reviewed</option>
-                  <option value="resolved">Resolved</option>
-                </select>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={feedbackStatusFilter}
+                    onChange={(e) => {
+                      setFeedbackStatusFilter(e.target.value);
+                    }}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="new">New</option>
+                    <option value="reviewed">Reviewed</option>
+                    <option value="resolved">Resolved</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void handleCsvExport("feedback", feedbackStatusFilter || undefined)}
+                    disabled={exportingReport === "feedback"}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-60"
+                  >
+                    {exportingReport === "feedback" ? "Exporting..." : "Export CSV"}
+                  </button>
+                </div>
               </div>
               <div className="space-y-4">
                 {feedbackItems.map((item) => (

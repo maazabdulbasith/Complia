@@ -6,7 +6,10 @@ from .models import (
     AssistedIntent,
     CAHelpRequest,
     ExperimentExposure,
+    PaymentOrder,
+    PaymentPlan,
     User,
+    UserEntitlement,
     WeeklyKpiSnapshot,
 )
 
@@ -277,3 +280,95 @@ class AssistedOfferSerializer(serializers.ModelSerializer):
     class Meta:
         model = AssistedOffer
         fields = ["key", "name", "description", "target_severity", "config", "is_active"]
+
+
+class PaymentPlanSerializer(serializers.ModelSerializer):
+    amount_inr = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PaymentPlan
+        fields = [
+            "key",
+            "name",
+            "description",
+            "amount_paise",
+            "amount_inr",
+            "currency",
+            "credits",
+            "is_active",
+            "is_default",
+        ]
+
+    def get_amount_inr(self, obj):
+        return float(obj.amount_paise) / 100.0
+
+
+class PaymentOrderCreateSerializer(serializers.Serializer):
+    plan_key = serializers.CharField(max_length=80)
+
+    def validate_plan_key(self, value):
+        cleaned = value.strip()
+        if not cleaned:
+            raise serializers.ValidationError("Plan key is required.")
+        if not PaymentPlan.objects.filter(key=cleaned, is_active=True).exists():
+            raise serializers.ValidationError("Invalid plan key.")
+        return cleaned
+
+
+class PaymentTestConfirmSerializer(serializers.Serializer):
+    order_id = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    plan_key = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    user_email = serializers.EmailField(required=False, allow_blank=True)
+    provider_payment_id = serializers.CharField(max_length=120, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        order_id = (attrs.get("order_id") or "").strip()
+        plan_key = (attrs.get("plan_key") or "").strip()
+        if not order_id and not plan_key:
+            raise serializers.ValidationError("Provide either order_id or plan_key.")
+        if order_id:
+            attrs["order_id"] = order_id
+        if plan_key:
+            attrs["plan_key"] = plan_key
+        attrs["user_email"] = (attrs.get("user_email") or "").strip().lower()
+        return attrs
+
+
+class PaymentOrderSerializer(serializers.ModelSerializer):
+    plan_key = serializers.CharField(source="plan.key", read_only=True)
+    amount_inr = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PaymentOrder
+        fields = [
+            "id",
+            "order_id",
+            "status",
+            "plan_key",
+            "amount_paise",
+            "amount_inr",
+            "currency",
+            "credits",
+            "provider",
+            "provider_order_id",
+            "payment_session_id",
+            "checkout_url",
+            "paid_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+    def get_amount_inr(self, obj):
+        return float(obj.amount_paise) / 100.0
+
+
+class UserEntitlementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserEntitlement
+        fields = [
+            "parser_credits",
+            "lifetime_purchased_credits",
+            "lifetime_consumed_credits",
+            "updated_at",
+        ]

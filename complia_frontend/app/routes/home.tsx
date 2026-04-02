@@ -171,6 +171,25 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600 sm:mt-5 sm:text-lg">
               Search by code, keyword, or section. Get plain-English explanation, severity, legal context, and next actions.
             </p>
+            <div className="mt-5 flex flex-wrap gap-2 sm:mt-6">
+              <Link
+                to="/parser"
+                onClick={() =>
+                  trackEvent("parser_upload_cta_clicked", {
+                    source_path: "/",
+                  })
+                }
+                className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 sm:px-5 sm:py-3"
+              >
+                Upload Notice & Understand
+              </Link>
+              <Link
+                to="/ca-help"
+                className="inline-flex items-center justify-center rounded-2xl border border-slate-300/80 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 sm:px-5 sm:py-3"
+              >
+                Talk to a CA
+              </Link>
+            </div>
           </div>
 
           <div className="rounded-3xl border border-slate-200/80 bg-white/80 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-6">

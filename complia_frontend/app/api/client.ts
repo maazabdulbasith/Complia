@@ -218,9 +218,67 @@ export type ParserBenchmarkRun = {
   created_at: string;
 };
 
+export type PaymentPlan = {
+  key: string;
+  name: string;
+  description: string;
+  amount_paise: number;
+  amount_inr: number;
+  currency: string;
+  credits: number;
+  is_active: boolean;
+  is_default: boolean;
+};
+
+export type PaymentOrder = {
+  id: number;
+  order_id: string;
+  status: "created" | "payment_pending" | "paid" | "failed" | "cancelled";
+  plan_key: string;
+  amount_paise: number;
+  amount_inr: number;
+  currency: string;
+  credits: number;
+  provider: string;
+  provider_order_id: string;
+  payment_session_id: string;
+  checkout_url: string;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type UserEntitlements = {
+  parser_credits: number;
+  lifetime_purchased_credits: number;
+  lifetime_consumed_credits: number;
+  updated_at: string;
+};
+
+export type AdminCsvReportKey =
+  | "ca_requests"
+  | "assisted_intents"
+  | "feedback"
+  | "notice_qa"
+  | "parser_jobs";
+
+export type PaymentTestConfirmRequest = {
+  order_id?: string;
+  plan_key?: string;
+  user_email?: string;
+  provider_payment_id?: string;
+};
+
+export type PaymentTestConfirmResponse = {
+  status: "ok";
+  duplicate: boolean;
+  order: PaymentOrder;
+};
+
 type ApiErrorEnvelope = {
   status?: string;
   message?: string;
+  detail?: string;
   code?: string;
   errors?: Record<string, unknown>;
   details?: unknown;
@@ -232,6 +290,28 @@ type PaginatedResponse<T> = {
   previous: string | null;
   results: T[];
 };
+
+export class ApiClientError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly errors?: Record<string, unknown>;
+  readonly details?: unknown;
+
+  constructor(
+    message: string,
+    status: number,
+    code?: string,
+    errors?: Record<string, unknown>,
+    details?: unknown
+  ) {
+    super(message);
+    this.name = "ApiClientError";
+    this.status = status;
+    this.code = code;
+    this.errors = errors;
+    this.details = details;
+  }
+}
 
 function isPaginatedNoticeResponse(data: unknown): data is PaginatedNoticeResponse {
   return Boolean(data && typeof data === "object" && "results" in data && Array.isArray((data as PaginatedNoticeResponse).results));
@@ -250,6 +330,64 @@ function getAuthHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+async function parseApiErrorEnvelope(response: Response): Promise<ApiErrorEnvelope | null> {
+  try {
+    const data = (await response.clone().json()) as ApiErrorEnvelope;
+    if (data && typeof data === "object") {
+      return data;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function deriveMessageFromEnvelope(envelope: ApiErrorEnvelope | null, fallback: string): string {
+  if (!envelope) {
+    return fallback;
+  }
+  const normalizedDetail = (envelope.detail || envelope.message || "").toLowerCase();
+  if (
+    normalizedDetail.includes("given token not valid for any token type") ||
+    normalizedDetail.includes("token_not_valid")
+  ) {
+    return "Your session expired. Please sign in again.";
+  }
+  if (envelope.message) {
+    return envelope.message;
+  }
+  if (envelope.detail) {
+    return envelope.detail;
+  }
+  if (envelope.errors && typeof envelope.errors === "object") {
+    const [firstKey] = Object.keys(envelope.errors);
+    const firstValue = firstKey ? envelope.errors[firstKey] : null;
+    if (Array.isArray(firstValue) && firstValue.length > 0) {
+      return String(firstValue[0]);
+    }
+    if (typeof firstValue === "string") {
+      return firstValue;
+    }
+  }
+  return fallback;
+}
+
+async function buildApiClientError(response: Response, fallback: string): Promise<ApiClientError> {
+  const envelope = await parseApiErrorEnvelope(response);
+  if (response.status === 401) {
+    clearStoredAuth();
+    redirectToLoginWithNext();
+  }
+  const message = deriveMessageFromEnvelope(envelope, fallback);
+  return new ApiClientError(
+    message,
+    response.status,
+    envelope?.code,
+    envelope?.errors,
+    envelope?.details
+  );
+}
+
 function normalizeHeaders(headers?: HeadersInit): Record<string, string> {
   const normalized: Record<string, string> = {};
   if (!headers) {
@@ -266,6 +404,17 @@ function clearStoredAuth(): void {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem("user");
+}
+
+function redirectToLoginWithNext(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const loginUrl = `/login?next=${encodeURIComponent(currentPath)}`;
+  if (!window.location.pathname.startsWith("/login")) {
+    window.location.assign(loginUrl);
+  }
 }
 
 async function refreshAccessToken(): Promise<string | null> {
@@ -319,6 +468,8 @@ async function fetchWithAuth(url: string, init: RequestInit = {}): Promise<Respo
 
   const nextAccessToken = await refreshAccessToken();
   if (!nextAccessToken) {
+    clearStoredAuth();
+    redirectToLoginWithNext();
     return response;
   }
 
@@ -329,31 +480,16 @@ async function fetchWithAuth(url: string, init: RequestInit = {}): Promise<Respo
       Authorization: `Bearer ${nextAccessToken}`,
     },
   });
+  if (response.status === 401) {
+    clearStoredAuth();
+    redirectToLoginWithNext();
+  }
   return response;
 }
 
 async function getApiErrorMessage(response: Response, fallback: string): Promise<string> {
-  try {
-    const data = (await response.json()) as ApiErrorEnvelope;
-    if (data.message) {
-      return data.message;
-    }
-
-    if (data.errors && typeof data.errors === "object") {
-      const [firstKey] = Object.keys(data.errors);
-      const firstValue = firstKey ? data.errors[firstKey] : null;
-      if (Array.isArray(firstValue) && firstValue.length > 0) {
-        return String(firstValue[0]);
-      }
-      if (typeof firstValue === "string") {
-        return firstValue;
-      }
-    }
-  } catch {
-    // fall through
-  }
-
-  return fallback;
+  const envelope = await parseApiErrorEnvelope(response);
+  return deriveMessageFromEnvelope(envelope, fallback);
 }
 
 export async function searchNotices(query: string): Promise<NoticeType[]> {
@@ -481,7 +617,7 @@ export async function uploadParserFile(file: File, noticeCode?: string): Promise
     body: formData,
   });
   if (!response.ok) {
-    throw new Error(await getApiErrorMessage(response, "Failed to upload parser file"));
+    throw await buildApiClientError(response, "Failed to upload parser file");
   }
   return response.json();
 }
@@ -490,6 +626,51 @@ export async function getParserResult(jobId: number): Promise<ParserJob> {
   const response = await fetchWithAuth(`${API_BASE}/parser/results/${jobId}/`);
   if (!response.ok) {
     throw new Error(await getApiErrorMessage(response, "Failed to fetch parser result"));
+  }
+  return response.json();
+}
+
+export async function getPaymentPlans(): Promise<PaymentPlan[]> {
+  const response = await fetch(`${API_BASE}/payments/plans/`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
+    },
+  });
+  if (!response.ok) {
+    throw await buildApiClientError(response, "Failed to fetch payment plans");
+  }
+  return response.json();
+}
+
+export async function createPaymentOrder(planKey: string): Promise<PaymentOrder> {
+  const response = await fetchWithAuth(`${API_BASE}/payments/orders/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ plan_key: planKey }),
+  });
+  if (!response.ok) {
+    throw await buildApiClientError(response, "Failed to create payment order");
+  }
+  return response.json();
+}
+
+export async function getMyEntitlements(): Promise<UserEntitlements> {
+  const response = await fetchWithAuth(`${API_BASE}/payments/me/entitlements/`);
+  if (!response.ok) {
+    throw await buildApiClientError(response, "Failed to fetch entitlements");
+  }
+  return response.json();
+}
+
+export async function confirmTestPayment(payload: PaymentTestConfirmRequest): Promise<PaymentTestConfirmResponse> {
+  const response = await fetchWithAuth(`${API_BASE}/payments/test/confirm/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await buildApiClientError(response, "Failed to simulate payment");
   }
   return response.json();
 }
@@ -706,4 +887,25 @@ export async function getAdminParserBenchmarks(): Promise<ParserBenchmarkRun[]> 
     return data;
   }
   throw new Error("Unexpected parser benchmark response format");
+}
+
+export async function downloadAdminCsvReport(
+  reportKey: AdminCsvReportKey,
+  statusFilter?: string
+): Promise<void> {
+  const query = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : "";
+  const response = await fetchWithAuth(`${API_BASE}/admin/exports/${reportKey}/${query}`);
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Failed to download CSV report"));
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `complia_${reportKey}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  window.URL.revokeObjectURL(url);
 }

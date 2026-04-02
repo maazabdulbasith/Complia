@@ -8,6 +8,7 @@ export default [
     route("contact-us", "routes/contact_us.tsx"),
     route("refund-policy", "routes/refund_policy.tsx"),
     route("cancellation-policy", "routes/cancellation_policy.tsx"),
+    route("parser", "routes/parser.tsx"),
     route("superadmin", "routes/superadmin.tsx"),
     route("ca-help", "routes/ca_help.tsx"),
     route("saved", "routes/saved_notices.tsx"),

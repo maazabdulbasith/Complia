@@ -27,7 +27,18 @@ export default function LoginPage() {
         });
 
         if (!backendResponse.ok) {
-          throw new Error("Authentication failed");
+          let backendMessage = "Authentication failed";
+          try {
+            const errorPayload = await backendResponse.json();
+            backendMessage =
+              errorPayload?.message ||
+              errorPayload?.detail ||
+              errorPayload?.errors?.detail ||
+              backendMessage;
+          } catch {
+            // Keep fallback message when response is not JSON.
+          }
+          throw new Error(backendMessage);
         }
 
         const data = await backendResponse.json();
@@ -45,9 +56,13 @@ export default function LoginPage() {
         trackEvent("login_success", { provider: "google" });
         const next = searchParams.get("next") || "/";
         navigate(next);
-      } catch {
+      } catch (err) {
         trackEvent("login_failed", { provider: "google" });
-        setError("Sign-in failed. Please try again.");
+        if (err instanceof Error && err.message) {
+          setError(err.message);
+        } else {
+          setError("Sign-in failed. Please try again.");
+        }
       } finally {
         setLoading(false);
       }
