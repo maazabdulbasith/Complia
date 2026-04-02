@@ -36,6 +36,11 @@ type CashfreeInstance = {
   checkout: (options: CashfreeCheckoutOptions) => Promise<CashfreeCheckoutResult>;
 };
 
+type PendingUploadDraft = {
+  file: File;
+  noticeCode: string | null;
+};
+
 declare global {
   interface Window {
     Cashfree?: (config: { mode: "sandbox" | "production" }) => CashfreeInstance;
@@ -246,9 +251,7 @@ export default function ParserUploadPage() {
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [isSimulatingPayment, setIsSimulatingPayment] = useState(false);
   const [paymentRequired, setPaymentRequired] = useState(false);
-  const [pendingUpload, setPendingUpload] = useState<{ file: File; noticeCode: string | null } | null>(
-    null
-  );
+  const [pendingUpload, setPendingUpload] = useState<PendingUploadDraft | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isAdminUser, setIsAdminUser] = useState(false);
@@ -308,6 +311,9 @@ export default function ParserUploadPage() {
   const ocrTextChars = payloadNumber(extractionPayload, "ocr_text_chars");
   const ocrEngine = payloadString(extractionPayload, "ocr_engine");
   const lowConfidence = confidencePercent < 75;
+  const availableCredits = entitlements?.parser_credits || 0;
+  const canUploadImmediately = isAdminUser || availableCredits > 0;
+  const pendingUploadName = pendingUpload?.file?.name || selectedFile?.name || "";
   const replyDeadlineLabel = formatDateLabel(parserJob?.extraction?.deadline_date);
   const riskBand = priorityBand(severityForGuidance, deadlineDaysLeft, confidencePercent);
   const isCodeMismatch =
@@ -615,8 +621,11 @@ export default function ParserUploadPage() {
     return null;
   };
 
-  const verifyPaymentAndResume = async () => {
-    if (!pendingUpload) {
+  const verifyPaymentAndResume = async (uploadOverride?: PendingUploadDraft) => {
+    const uploadDraft = uploadOverride || pendingUpload;
+    if (!uploadDraft) {
+      setErrorMessage("Payment was successful, but no file is selected. Choose your file and tap Upload.");
+      setStatusMessage(null);
       return;
     }
     const existingCredits = entitlements?.parser_credits || 0;
@@ -636,13 +645,13 @@ export default function ParserUploadPage() {
         currency: selectedPlan?.currency || "INR",
         source_path: "/parser",
       });
-      await performUpload(pendingUpload.file, pendingUpload.noticeCode || undefined);
+      await performUpload(uploadDraft.file, uploadDraft.noticeCode || undefined);
     } finally {
       setIsVerifyingPayment(false);
     }
   };
 
-  const startPayment = async () => {
+  const startPayment = async (uploadDraft?: PendingUploadDraft) => {
     if (!isLoggedIn) {
       navigate(`/login?next=${encodeURIComponent(`/parser?notice=${noticeCode}`)}`);
       return;
@@ -651,8 +660,10 @@ export default function ParserUploadPage() {
       setErrorMessage("No payment plan available.");
       return;
     }
-    if (!pendingUpload && selectedFile) {
-      setPendingUpload({ file: selectedFile, noticeCode: noticeCode.trim() || null });
+    const effectiveUpload =
+      uploadDraft || pendingUpload || (selectedFile ? { file: selectedFile, noticeCode: noticeCode.trim() || null } : null);
+    if (effectiveUpload) {
+      setPendingUpload(effectiveUpload);
     }
 
     setIsProcessingPayment(true);
@@ -702,7 +713,7 @@ export default function ParserUploadPage() {
       }
 
       setStatusMessage("Payment complete. Verifying and unlocking parser...");
-      await verifyPaymentAndResume();
+      await verifyPaymentAndResume(effectiveUpload || undefined);
     } catch (error) {
       if (error instanceof ApiClientError && error.status === 401) {
         navigate(`/login?next=${encodeURIComponent(`/parser?notice=${noticeCode}`)}`);
@@ -763,7 +774,6 @@ export default function ParserUploadPage() {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setParserJob(null);
     setErrorMessage(null);
     setStatusMessage(null);
 
@@ -777,9 +787,17 @@ export default function ParserUploadPage() {
       return;
     }
 
-    const uploadDraft = { file: selectedFile, noticeCode: noticeCode.trim() || null };
+    const uploadDraft: PendingUploadDraft = { file: selectedFile, noticeCode: noticeCode.trim() || null };
     setPendingUpload(uploadDraft);
-    await performUpload(uploadDraft.file, uploadDraft.noticeCode || undefined);
+    if (canUploadImmediately) {
+      setParserJob(null);
+      await performUpload(uploadDraft.file, uploadDraft.noticeCode || undefined);
+      return;
+    }
+
+    setPaymentRequired(true);
+    setStatusMessage("No parser credits available. Opening checkout and auto-continuing with this file...");
+    await startPayment(uploadDraft);
   };
 
   const handleSaveNotice = async () => {
@@ -823,20 +841,22 @@ export default function ParserUploadPage() {
       <div className="pointer-events-none absolute bottom-0 -left-20 h-80 w-80 rounded-full bg-blue-300/20 blur-3xl" />
 
       <main className="relative z-10 mx-auto w-full max-w-6xl">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <BrandMark to="/" imageClassName="h-9 w-auto" />
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
-          >
-            <span aria-hidden>&larr;</span> Back to search
-          </Link>
-          <Link
-            to="/saved"
-            className="inline-flex items-center rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 sm:text-sm"
-          >
-            Safe
-          </Link>
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <BrandMark to="/" imageClassName="h-9 w-9" className="shrink-0" />
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+            >
+              <span aria-hidden>&larr;</span> Back to search
+            </Link>
+            <Link
+              to="/saved"
+              className="inline-flex items-center rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 sm:text-sm"
+            >
+              Safe
+            </Link>
+          </div>
         </div>
 
         <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
@@ -881,6 +901,11 @@ export default function ParserUploadPage() {
                 <p className="mt-1 text-xs text-slate-500">
                   Supported: PDF, PNG, JPG, JPEG, WEBP, and TXT. For best OCR, upload clear scans.
                 </p>
+                {selectedFile && (
+                  <p className="mt-2 text-xs font-medium text-slate-700">
+                    Selected file: {selectedFile.name}
+                  </p>
+                )}
               </div>
 
               <button
@@ -897,8 +922,15 @@ export default function ParserUploadPage() {
                     ? "Opening checkout..."
                     : isVerifyingPayment
                       ? "Verifying payment..."
-                      : "Upload & Continue"}
+                      : canUploadImmediately
+                        ? "Upload & Continue"
+                        : "Pay & Upload Notice"}
               </button>
+              {!canUploadImmediately && selectedFile && (
+                <p className="text-xs text-slate-600">
+                  We will keep this file and auto-upload it right after successful payment.
+                </p>
+              )}
             </form>
 
             {statusMessage && (
@@ -1255,7 +1287,9 @@ export default function ParserUploadPage() {
                       ? "Opening checkout..."
                       : isVerifyingPayment
                         ? "Verifying payment..."
-                        : `Pay ${selectedPlan ? formatCurrencyINR(selectedPlan.amount_inr) : ""} & Unlock`}
+                        : pendingUploadName
+                          ? `Pay ${selectedPlan ? formatCurrencyINR(selectedPlan.amount_inr) : ""} & Continue (${pendingUploadName})`
+                          : `Pay ${selectedPlan ? formatCurrencyINR(selectedPlan.amount_inr) : ""} & Unlock`}
                   </button>
                   <button
                     type="button"
