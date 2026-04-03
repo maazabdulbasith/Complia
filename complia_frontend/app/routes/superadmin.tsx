@@ -514,9 +514,9 @@ export default function SuperAdminDashboard() {
                 })}
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
-              <aside className="lg:sticky lg:top-4 lg:self-start">
-                <nav className="rounded-2xl border border-white/60 bg-white/85 p-4 shadow-sm backdrop-blur lg:max-h-[calc(100vh-1.5rem)] lg:overflow-auto">
+            <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+              <aside className="hidden xl:block xl:sticky xl:top-6 xl:self-start">
+                <nav className="rounded-2xl border border-white/60 bg-white/90 p-4 shadow-sm backdrop-blur xl:max-h-[calc(100vh-3rem)] xl:overflow-auto">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 mb-3">
                     Sections
                   </p>

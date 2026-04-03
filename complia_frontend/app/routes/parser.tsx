@@ -283,7 +283,12 @@ function buildPersonalizedActionChecklist({
   return checklist;
 }
 
-function buildParserSnapshot(job: ParserJob, caBriefText: string, checklist: string[]) {
+function buildParserSnapshot(
+  job: ParserJob,
+  caBriefText: string,
+  checklist: string[],
+  extras?: Record<string, unknown>
+) {
   return {
     parser_job_id: job.id,
     notice_code: job.notice_code || "",
@@ -294,6 +299,7 @@ function buildParserSnapshot(job: ParserJob, caBriefText: string, checklist: str
     amount_claimed: job.extraction?.amount_claimed || "",
     ca_brief: caBriefText,
     next_steps_checklist: checklist,
+    ...(extras || {}),
   };
 }
 
@@ -331,7 +337,6 @@ export default function ParserUploadPage() {
   const [detectedNotice, setDetectedNotice] = useState<NoticeType | null>(null);
   const [isLoadingNoticeExplain, setIsLoadingNoticeExplain] = useState(false);
   const [noticeExplainError, setNoticeExplainError] = useState<string | null>(null);
-  const [showFullExcerpt, setShowFullExcerpt] = useState(false);
   const [isSavingNotice, setIsSavingNotice] = useState(false);
   const [saveNoticeMessage, setSaveNoticeMessage] = useState<string | null>(null);
   const [saveNoticeError, setSaveNoticeError] = useState<string | null>(null);
@@ -555,7 +560,6 @@ export default function ParserUploadPage() {
   }, [parserJob?.notice_code]);
 
   useEffect(() => {
-    setShowFullExcerpt(false);
     setSaveNoticeMessage(null);
     setSaveNoticeError(null);
     setCopyBriefMessage(null);
@@ -666,7 +670,12 @@ export default function ParserUploadPage() {
         void saveDetectedNotice(job.notice, {
           source: "auto",
           parserJobId: job.id,
-          parserSnapshot: buildParserSnapshot(job, uploadBrief, uploadChecklist),
+          parserSnapshot: buildParserSnapshot(job, uploadBrief, uploadChecklist, {
+            decision_headline: "Parser result unlocked",
+            decision_explanation: "Complia extracted a draft from your uploaded notice and is finalizing the mapped explanation.",
+            immediate_next_move: "Review the structured result, confirm the detected notice, and move the case into Safe.",
+            urgency_guidance: uploadDeadlineLabel,
+          }),
           actionStatus: "not_started",
           caBrief: uploadBrief,
           nextStepsChecklist: uploadChecklist,
@@ -893,7 +902,22 @@ export default function ParserUploadPage() {
     await saveDetectedNotice(parserJob.notice, {
       source: "manual",
       parserJobId: parserJob.id,
-      parserSnapshot: buildParserSnapshot(parserJob, caBrief, actionChecklist),
+      parserSnapshot: buildParserSnapshot(parserJob, caBrief, actionChecklist, {
+        decision_headline: decisionSummary.headline,
+        decision_explanation: decisionSummary.explanation,
+        immediate_next_move: decisionSummary.nextMove,
+        urgency_guidance: urgencyText,
+        risk_band: riskBand,
+        notice_title: detectedNotice?.title || "",
+        notice_summary: detectedNotice?.summary || "",
+        why_received: detectedNotice?.why_received || "",
+        consequences_of_ignoring: detectedNotice?.consequences_of_ignoring || "",
+        notice_next_steps: detectedNotice?.next_steps || "",
+        ocr_used: ocrUsed,
+        ocr_pages_processed: ocrPagesProcessed,
+        ocr_engine: ocrEngine,
+        low_confidence: lowConfidence,
+      }),
       actionStatus: "not_started",
       caBrief,
       nextStepsChecklist: actionChecklist,
@@ -920,7 +944,22 @@ export default function ParserUploadPage() {
       const saved = await saveDetectedNotice(parserJob.notice as number, {
         source: "auto",
         parserJobId: parserJob.id,
-        parserSnapshot: buildParserSnapshot(parserJob, caBrief, actionChecklist),
+        parserSnapshot: buildParserSnapshot(parserJob, caBrief, actionChecklist, {
+          decision_headline: decisionSummary.headline,
+          decision_explanation: decisionSummary.explanation,
+          immediate_next_move: decisionSummary.nextMove,
+          urgency_guidance: urgencyText,
+          risk_band: riskBand,
+          notice_title: detectedNotice?.title || "",
+          notice_summary: detectedNotice?.summary || "",
+          why_received: detectedNotice?.why_received || "",
+          consequences_of_ignoring: detectedNotice?.consequences_of_ignoring || "",
+          notice_next_steps: detectedNotice?.next_steps || "",
+          ocr_used: ocrUsed,
+          ocr_pages_processed: ocrPagesProcessed,
+          ocr_engine: ocrEngine,
+          low_confidence: lowConfidence,
+        }),
         actionStatus: "not_started",
         caBrief,
         nextStepsChecklist: actionChecklist,
@@ -1513,29 +1552,6 @@ export default function ParserUploadPage() {
                   {copyBriefMessage && <p className="mt-2 text-xs text-emerald-700">{copyBriefMessage}</p>}
                 </div>
 
-                {parserJob.extraction?.raw_text_excerpt && (
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Text excerpt</p>
-                      {parserJob.extraction.raw_text_excerpt.length > 420 && (
-                        <button
-                          type="button"
-                          onClick={() => setShowFullExcerpt((value) => !value)}
-                          className="text-xs font-semibold text-blue-700 transition hover:text-blue-800"
-                        >
-                          {showFullExcerpt ? "Hide full text" : "Show full text"}
-                        </button>
-                      )}
-                    </div>
-                    <p className="mt-1 text-sm leading-6 text-slate-700">
-                      {showFullExcerpt
-                        ? parserJob.extraction.raw_text_excerpt
-                        : `${parserJob.extraction.raw_text_excerpt.slice(0, 420)}${
-                            parserJob.extraction.raw_text_excerpt.length > 420 ? "..." : ""
-                          }`}
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
           </section>

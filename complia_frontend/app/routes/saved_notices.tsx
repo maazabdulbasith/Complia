@@ -212,6 +212,11 @@ export default function SavedNoticesPage() {
               const legalSection = readString(snapshot, "legal_section") || "Not detected";
               const amountClaimed = readString(snapshot, "amount_claimed") || "Not detected";
               const deadlineDate = formatDate(readString(snapshot, "deadline_date"));
+              const decisionHeadline = readString(snapshot, "decision_headline") || "Saved parser workspace";
+              const decisionExplanation = readString(snapshot, "decision_explanation");
+              const immediateNextMove = readString(snapshot, "immediate_next_move");
+              const urgencyGuidance = readString(snapshot, "urgency_guidance");
+              const riskBand = readString(snapshot, "risk_band");
 
               return (
                 <div
@@ -235,8 +240,35 @@ export default function SavedNoticesPage() {
 
                   <p className="mt-2 text-sm leading-6 text-slate-600">{item.notice.summary}</p>
 
+                  <div className="mt-4 rounded-2xl border border-slate-900/10 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-900 p-5 text-white shadow-[0_20px_50px_rgba(15,23,42,0.14)]">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-200/90">
+                          Saved parser workspace
+                        </p>
+                        <h3 className="mt-2 text-2xl font-bold tracking-tight">{decisionHeadline}</h3>
+                      </div>
+                      {riskBand && (
+                        <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white ring-1 ring-white/15">
+                          {riskBand}
+                        </span>
+                      )}
+                    </div>
+                    {decisionExplanation && (
+                      <p className="mt-3 text-sm leading-7 text-white/85">{decisionExplanation}</p>
+                    )}
+                    {immediateNextMove && (
+                      <div className="mt-4 rounded-2xl border border-white/10 bg-white/6 p-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100/80">
+                          Immediate next move
+                        </p>
+                        <p className="mt-2 text-sm leading-7 text-white/90">{immediateNextMove}</p>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Paid parser snapshot</p>
                       {item.parser_job_id ? (
                         <div className="mt-2 space-y-1 text-sm text-slate-700">
@@ -244,17 +276,18 @@ export default function SavedNoticesPage() {
                           <p>Legal section: {legalSection}</p>
                           <p>Amount claimed: {amountClaimed}</p>
                           <p>Deadline: {deadlineDate}</p>
+                          {urgencyGuidance && <p>Urgency: {urgencyGuidance}</p>}
                         </div>
                       ) : (
                         <p className="mt-2 text-sm text-slate-600">No paid parser result linked yet.</p>
                       )}
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Next actions</p>
                       {checklist.length > 0 ? (
                         <ol className="mt-2 space-y-1 text-sm text-slate-700">
-                          {checklist.slice(0, 4).map((step, index) => (
+                          {checklist.map((step, index) => (
                             <li key={`${item.id}-${index}`} className="leading-6">
                               {index + 1}. {step}
                             </li>
@@ -265,6 +298,34 @@ export default function SavedNoticesPage() {
                       )}
                     </div>
                   </div>
+
+                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                    {item.notice.why_received && (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-700">
+                          Why you likely got this
+                        </p>
+                        <p className="mt-2 text-sm leading-7 text-slate-700">{item.notice.why_received}</p>
+                      </div>
+                    )}
+                    {item.notice.consequences_of_ignoring && (
+                      <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-700">
+                          If you ignore this
+                        </p>
+                        <p className="mt-2 text-sm leading-7 text-rose-900">{item.notice.consequences_of_ignoring}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {item.notice.next_steps && (
+                    <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-700">
+                        What to do next
+                      </p>
+                      <p className="mt-2 whitespace-pre-line text-sm leading-7 text-blue-900">{item.notice.next_steps}</p>
+                    </div>
+                  )}
 
                   <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
