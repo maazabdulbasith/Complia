@@ -81,8 +81,10 @@ export type SuperAdminOutletContext = {
   setAssistedStatusFilter: Dispatch<SetStateAction<string>>;
   paymentStatusFilter: string;
   setPaymentStatusFilter: Dispatch<SetStateAction<string>>;
-  noticeQaFilter: "" | "stale" | "unverified";
-  setNoticeQaFilter: Dispatch<SetStateAction<"" | "stale" | "unverified">>;
+  noticeQaFilter: "" | "stale" | "unverified" | "needs_review" | "missing_source" | "trusted" | "watch" | "source_error";
+  setNoticeQaFilter: Dispatch<
+    SetStateAction<"" | "stale" | "unverified" | "needs_review" | "missing_source" | "trusted" | "watch" | "source_error">
+  >;
   parserStatusFilter: string;
   setParserStatusFilter: Dispatch<SetStateAction<string>>;
   paymentStatusCounts: { initiated: number; abandoned: number; failed: number; success: number };
@@ -101,7 +103,12 @@ export type SuperAdminOutletContext = {
   ) => Promise<void>;
   handleNoticeQaUpdate: (
     noticeId: number,
-    payload: Partial<Pick<AdminNoticeItem, "is_active" | "verified_by" | "verified_at" | "meta_title" | "meta_description">>
+    payload: Partial<
+      Pick<
+        AdminNoticeItem,
+        "is_active" | "verified_by" | "verified_at" | "meta_title" | "meta_description" | "source_url" | "review_status"
+      >
+    >
   ) => Promise<void>;
   handleParserJobUpdate: (
     parserJobId: number,

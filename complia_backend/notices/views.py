@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import filters, generics, mixins, permissions, serializers, status, viewsets
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -195,8 +196,8 @@ class SuperAdminNoticeTypeViewSet(
     throttle_scope = "admin_ops"
     queryset = NoticeType.objects.prefetch_related("triggers").all()
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["code", "title", "slug", "verified_by", "meta_title", "meta_description"]
-    ordering_fields = ["updated_at", "verified_at", "severity", "code"]
+    search_fields = ["code", "title", "slug", "verified_by", "meta_title", "meta_description", "source_url"]
+    ordering_fields = ["updated_at", "verified_at", "severity", "code", "source_last_checked_at", "review_status"]
     ordering = ["code"]
 
     def get_queryset(self):
@@ -205,8 +206,18 @@ class SuperAdminNoticeTypeViewSet(
         if status_filter == "stale":
             stale_cutoff = timezone.now() - timedelta(days=90)
             queryset = queryset.filter(verified_at__lt=stale_cutoff)
-        if status_filter == "unverified":
+        elif status_filter == "unverified":
             queryset = queryset.filter(verified_at__isnull=True)
+        elif status_filter == "needs_review":
+            queryset = queryset.filter(review_status="needs_review")
+        elif status_filter == "trusted":
+            queryset = queryset.filter(review_status="trusted")
+        elif status_filter == "watch":
+            queryset = queryset.filter(review_status="watch")
+        elif status_filter == "missing_source":
+            queryset = queryset.filter(Q(source_url__isnull=True) | Q(source_url=""))
+        elif status_filter == "source_error":
+            queryset = queryset.exclude(source_check_error="")
         return queryset
 
 

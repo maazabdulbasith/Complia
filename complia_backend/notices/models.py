@@ -3,6 +3,11 @@ from django.conf import settings
 from django.utils.text import slugify
 
 class NoticeType(models.Model):
+    REVIEW_STATUS_CHOICES = [
+        ("watch", "Watch"),
+        ("trusted", "Trusted"),
+        ("needs_review", "Needs Review"),
+    ]
     SEVERITY_CHOICES = [
         ('low', 'Low - Informational'),
         ('medium', 'Medium - Action Required'),
@@ -29,6 +34,12 @@ class NoticeType(models.Model):
     # Resilience / Validation Fields
     verified_by = models.CharField(max_length=100, blank=True, null=True, help_text="Name of the expert who verified this")
     verified_at = models.DateTimeField(blank=True, null=True)
+    source_url = models.URLField(blank=True, help_text="Official source or reference page used to monitor this notice")
+    source_content_hash = models.CharField(max_length=64, blank=True)
+    source_last_checked_at = models.DateTimeField(blank=True, null=True)
+    source_last_changed_at = models.DateTimeField(blank=True, null=True)
+    source_check_error = models.TextField(blank=True)
+    review_status = models.CharField(max_length=20, choices=REVIEW_STATUS_CHOICES, default="watch", db_index=True)
     is_active = models.BooleanField(default=False, help_text="Only active notices are shown to users")
 
     created_at = models.DateTimeField(auto_now_add=True)

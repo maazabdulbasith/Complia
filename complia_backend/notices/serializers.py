@@ -81,13 +81,27 @@ class AdminNoticeTypeSerializer(serializers.ModelSerializer):
             "is_active",
             "verified_by",
             "verified_at",
+            "source_url",
+            "source_last_checked_at",
+            "source_last_changed_at",
+            "source_check_error",
+            "review_status",
             "meta_title",
             "meta_description",
             "updated_at",
             "is_stale",
             "trigger_keywords",
         ]
-        read_only_fields = ["id", "code", "updated_at", "is_stale", "trigger_keywords"]
+        read_only_fields = [
+            "id",
+            "code",
+            "updated_at",
+            "is_stale",
+            "trigger_keywords",
+            "source_last_checked_at",
+            "source_last_changed_at",
+            "source_check_error",
+        ]
 
     def get_trigger_keywords(self, obj):
         return list(obj.triggers.values_list("keyword", flat=True))

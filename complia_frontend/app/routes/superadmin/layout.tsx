@@ -70,7 +70,9 @@ export default function SuperAdminLayout() {
   const [feedbackStatusFilter, setFeedbackStatusFilter] = useState("");
   const [assistedStatusFilter, setAssistedStatusFilter] = useState("");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState("");
-  const [noticeQaFilter, setNoticeQaFilter] = useState<"" | "stale" | "unverified">("");
+  const [noticeQaFilter, setNoticeQaFilter] = useState<
+    "" | "stale" | "unverified" | "needs_review" | "missing_source" | "trusted" | "watch" | "source_error"
+  >("");
   const [parserStatusFilter, setParserStatusFilter] = useState("");
   const [exportingReport, setExportingReport] = useState<AdminCsvReportKey | null>(null);
 

@@ -232,6 +232,11 @@ export type AdminNoticeItem = {
   is_active: boolean;
   verified_by: string | null;
   verified_at: string | null;
+  source_url: string;
+  source_last_checked_at: string | null;
+  source_last_changed_at: string | null;
+  source_check_error: string;
+  review_status: "watch" | "trusted" | "needs_review";
   meta_title: string;
   meta_description: string;
   updated_at: string;
@@ -967,7 +972,9 @@ export async function grantAdminPaymentCredits(orderId: string): Promise<Payment
   return data.order;
 }
 
-export async function getAdminNoticeItems(status?: "stale" | "unverified"): Promise<AdminNoticeItem[]> {
+export async function getAdminNoticeItems(
+  status?: "stale" | "unverified" | "needs_review" | "missing_source" | "trusted" | "watch" | "source_error"
+): Promise<AdminNoticeItem[]> {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
   const response = await fetchWithAuth(`${API_BASE}/admin/notices/${query}`);
   if (!response.ok) {
@@ -985,7 +992,12 @@ export async function getAdminNoticeItems(status?: "stale" | "unverified"): Prom
 
 export async function updateAdminNoticeItem(
   noticeId: number,
-  payload: Partial<Pick<AdminNoticeItem, "is_active" | "verified_by" | "verified_at" | "meta_title" | "meta_description">>
+  payload: Partial<
+    Pick<
+      AdminNoticeItem,
+      "is_active" | "verified_by" | "verified_at" | "meta_title" | "meta_description" | "source_url" | "review_status"
+    >
+  >
 ): Promise<AdminNoticeItem> {
   const response = await fetchWithAuth(`${API_BASE}/admin/notices/${noticeId}/`, {
     method: "PATCH",

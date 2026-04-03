@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 from datetime import timedelta
+from io import StringIO
 from unittest.mock import Mock, patch
 
 import requests
@@ -1017,3 +1018,76 @@ class NoticeAPITests(APITestCase):
         call_command("ensure_notice_baseline", "--target", "30", "--verified-by", "QA Team")
         self.assertGreaterEqual(NoticeType.objects.filter(is_active=True).count(), 30)
         self.assertGreaterEqual(NoticeType.objects.filter(is_active=True, verified_at__isnull=False).count(), 30)
+
+    def test_superadmin_notice_filter_supports_needs_review_and_missing_source(self):
+        admin = User.objects.create_user(email="admin-notice@complia.in", password="pass123456", user_type="admin")
+        self.notice.review_status = "needs_review"
+        self.notice.source_url = "https://example.com/source"
+        self.notice.save(update_fields=["review_status", "source_url"])
+
+        self.client.force_authenticate(user=admin)
+        review_response = self.client.get("/api/v1/admin/notices/?status=needs_review")
+        self.assertEqual(review_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(review_response.data["count"], 1)
+
+        missing_source_response = self.client.get("/api/v1/admin/notices/?status=missing_source")
+        self.assertEqual(missing_source_response.status_code, status.HTTP_200_OK)
+        result_codes = [row["code"] for row in missing_source_response.data["results"]]
+        self.assertIn("HIGH-001", result_codes)
+
+    def test_superadmin_notice_update_source_metadata(self):
+        admin = User.objects.create_user(email="admin-notice-edit@complia.in", password="pass123456", user_type="admin")
+        self.client.force_authenticate(user=admin)
+        response = self.client.patch(
+            f"/api/v1/admin/notices/{self.notice.id}/",
+            {
+                "source_url": "https://example.com/gst-asmt-10",
+                "review_status": "trusted",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.notice.refresh_from_db()
+        self.assertEqual(self.notice.source_url, "https://example.com/gst-asmt-10")
+        self.assertEqual(self.notice.review_status, "trusted")
+
+    @patch("complia_backend.notices.management.commands.check_notice_sources.requests.get")
+    def test_check_notice_sources_command_stores_baseline_hash(self, mock_get):
+        self.notice.source_url = "https://example.com/asmt-10"
+        self.notice.review_status = "watch"
+        self.notice.save(update_fields=["source_url", "review_status"])
+
+        mock_response = Mock()
+        mock_response.content = b"<html><body>Official GST ASMT-10 reference</body></html>"
+        mock_response.headers = {"Content-Type": "text/html"}
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        out = StringIO()
+        call_command("check_notice_sources", "--code", self.notice.code, stdout=out)
+
+        self.notice.refresh_from_db()
+        self.assertTrue(self.notice.source_content_hash)
+        self.assertIsNotNone(self.notice.source_last_checked_at)
+        self.assertEqual(self.notice.review_status, "watch")
+        self.assertEqual(self.notice.source_check_error, "")
+        self.assertIn("baseline hash stored", out.getvalue())
+
+    @patch("complia_backend.notices.management.commands.check_notice_sources.requests.get")
+    def test_check_notice_sources_marks_changed_notice_for_review(self, mock_get):
+        self.notice.source_url = "https://example.com/asmt-10"
+        self.notice.source_content_hash = "old-hash"
+        self.notice.review_status = "trusted"
+        self.notice.save(update_fields=["source_url", "source_content_hash", "review_status"])
+
+        mock_response = Mock()
+        mock_response.content = b"new official source content"
+        mock_response.headers = {"Content-Type": "text/plain"}
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        call_command("check_notice_sources", "--code", self.notice.code)
+
+        self.notice.refresh_from_db()
+        self.assertEqual(self.notice.review_status, "needs_review")
+        self.assertIsNotNone(self.notice.source_last_changed_at)
