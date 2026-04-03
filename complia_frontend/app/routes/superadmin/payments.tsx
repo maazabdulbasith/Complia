@@ -1,4 +1,4 @@
-import { EmptyState, PaymentStatusPill, SectionHeader, useSuperAdmin } from "./shared";
+import { AdminPageIntro, EmptyState, PaymentStatusPill, SectionHeader, useSuperAdmin } from "./shared";
 
 export default function SuperAdminPaymentsPage() {
   const {
@@ -12,6 +12,12 @@ export default function SuperAdminPaymentsPage() {
 
   return (
     <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">
+      <AdminPageIntro
+        eyebrow="SuperAdmin / Payments"
+        title="Payments Inbox"
+        description="Watch initiated, abandoned, failed, and successful orders so credits and checkout health stay in sync."
+        badge="Revenue ops"
+      />
       <SectionHeader title="Payments Inbox" count={paymentOrders.length}>
         <select
           value={paymentStatusFilter}
@@ -52,7 +58,7 @@ export default function SuperAdminPaymentsPage() {
               <div>
                 <p className="font-semibold text-slate-900">{item.order_id}</p>
                 <p className="text-sm text-slate-500">
-                  {item.user_email || "Guest checkout"} · {item.plan_key} · ?{item.amount_inr}
+                  {item.user_email || "Guest checkout"} Â· {item.plan_key} Â· ?{item.amount_inr}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">Created {new Date(item.created_at).toLocaleString()}</p>
               </div>
@@ -90,3 +96,4 @@ export default function SuperAdminPaymentsPage() {
     </section>
   );
 }
+

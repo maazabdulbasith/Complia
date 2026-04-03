@@ -208,10 +208,14 @@ class AdminCAHelpRequestSerializer(serializers.ModelSerializer):
 
 
 class CAPanelProfileSerializer(serializers.ModelSerializer):
+    user_email = serializers.CharField(source="user.email", read_only=True)
+
     class Meta:
         model = CAPanelProfile
         fields = [
             "id",
+            "user",
+            "user_email",
             "display_name",
             "email",
             "phone_number",
@@ -220,8 +224,24 @@ class CAPanelProfileSerializer(serializers.ModelSerializer):
             "specialties",
             "turnaround_sla_hours",
             "is_active",
+            "notes",
         ]
-        read_only_fields = fields
+        read_only_fields = ["id", "user_email"]
+
+    def validate_email(self, value):
+        return value.strip().lower()
+
+    def validate_specialties(self, value):
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Specialties must be an array of strings.")
+        cleaned = []
+        for item in value:
+            text = str(item).strip()
+            if text:
+                cleaned.append(text[:80])
+        return cleaned
 
 
 class AssistedIntentSerializer(serializers.ModelSerializer):

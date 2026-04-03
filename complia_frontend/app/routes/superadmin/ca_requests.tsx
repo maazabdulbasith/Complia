@@ -1,5 +1,5 @@
 import type { AdminCARequest } from "../../api/client";
-import { EmptyState, SectionHeader, useSuperAdmin } from "./shared";
+import { AdminPageIntro, EmptyState, SectionHeader, useSuperAdmin } from "./shared";
 
 export default function SuperAdminCaRequestsPage() {
   const {
@@ -15,6 +15,12 @@ export default function SuperAdminCaRequestsPage() {
 
   return (
     <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">
+      <AdminPageIntro
+        eyebrow="SuperAdmin / CA Requests"
+        title="CA Request Handoff"
+        description="Review consented user requests, set urgency, assign a vetted CA, and move each case through contact to resolution."
+        badge="Case ops"
+      />
       <SectionHeader title="CA Requests" count={caRequests.length}>
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -44,7 +50,7 @@ export default function SuperAdminCaRequestsPage() {
 
       {caPanel.length === 0 && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          No vetted CA panel entries are available yet. Requests can be reviewed here, but assignment choices will stay empty until you add at least one vetted CA.
+          No vetted CA panel entries are available yet. Requests can be reviewed here, but assignment choices will stay empty until you add at least one vetted CA in the CA Panel section.
         </div>
       )}
 
@@ -54,10 +60,10 @@ export default function SuperAdminCaRequestsPage() {
             <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
               <div>
                 <p className="break-words font-semibold text-slate-900">
-                  {item.name} · {item.email}
+                  {item.name} Â· {item.email}
                 </p>
                 <p className="text-sm text-slate-500">
-                  Notice: {item.notice_code || "General"} · {item.phone_number || "No phone"}
+                  Notice: {item.notice_code || "General"} Â· {item.phone_number || "No phone"}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <span
@@ -121,7 +127,7 @@ export default function SuperAdminCaRequestsPage() {
                 <option value="">Assign vetted CA</option>
                 {caPanel.map((ca) => (
                   <option key={ca.id} value={ca.id}>
-                    {ca.display_name} · {ca.city || ca.email}
+                    {ca.display_name} Â· {ca.city || ca.email}
                   </option>
                 ))}
               </select>
@@ -145,3 +151,4 @@ export default function SuperAdminCaRequestsPage() {
     </section>
   );
 }
+

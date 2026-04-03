@@ -275,6 +275,35 @@ class SuperAdminCARequestOpsTests(APITestCase):
         self.assertGreaterEqual(len(results), 1)
         self.assertTrue(any(item["display_name"] == "Aarav Shah" for item in results))
 
+    def test_admin_can_create_and_update_ca_panel_profile(self):
+        self.client.force_authenticate(user=self.admin)
+        create_response = self.client.post(
+            "/api/v1/admin/ca-panel/",
+            {
+                "display_name": "Meera Iyer",
+                "email": "meera@example.com",
+                "phone_number": "9876543211",
+                "city": "Chennai",
+                "specialties": ["GST", "ITR"],
+                "turnaround_sla_hours": 12,
+                "is_active": True,
+                "notes": "Great with salaryman notices",
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        profile_id = create_response.data["id"]
+
+        update_response = self.client.patch(
+            f"/api/v1/admin/ca-panel/{profile_id}/",
+            {"is_active": False, "notes": "Temporarily unavailable"},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        profile = CAPanelProfile.objects.get(id=profile_id)
+        self.assertFalse(profile.is_active)
+        self.assertEqual(profile.notes, "Temporarily unavailable")
+
     def test_user_can_view_own_ca_requests(self):
         self.client.force_authenticate(user=self.user)
         response = self.client.get("/api/v1/ca-help/my/")

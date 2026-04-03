@@ -1,5 +1,5 @@
 import type { AdminAssistedIntent } from "../../api/client";
-import { EmptyState, SectionHeader, useSuperAdmin } from "./shared";
+import { AdminPageIntro, EmptyState, SectionHeader, useSuperAdmin } from "./shared";
 
 export default function SuperAdminAssistedIntentsPage() {
   const {
@@ -14,6 +14,12 @@ export default function SuperAdminAssistedIntentsPage() {
 
   return (
     <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">
+      <AdminPageIntro
+        eyebrow="SuperAdmin / Assisted Intents"
+        title="Assisted Intent Inbox"
+        description="Triage people who showed paid-assistance intent, capture outcomes, and keep the experiment funnel measurable."
+        badge="Lead ops"
+      />
       <SectionHeader title="Assisted Intents" count={assistedIntents.length}>
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -46,10 +52,10 @@ export default function SuperAdminAssistedIntentsPage() {
             <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
               <div>
                 <p className="break-words font-semibold text-slate-900">
-                  {item.notice_code_snapshot || "Unknown notice"} · {item.notice_title || "Unmapped"}
+                  {item.notice_code_snapshot || "Unknown notice"} Â· {item.notice_title || "Unmapped"}
                 </p>
                 <p className="text-sm text-slate-500">
-                  {item.email || "No email"} · {item.phone_number || "No phone"} · Severity: {item.severity_snapshot || "N/A"}
+                  {item.email || "No email"} Â· {item.phone_number || "No phone"} Â· Severity: {item.severity_snapshot || "N/A"}
                 </p>
               </div>
               <p className="text-xs text-slate-500">{new Date(item.created_at).toLocaleString()}</p>
@@ -89,3 +95,4 @@ export default function SuperAdminAssistedIntentsPage() {
     </section>
   );
 }
+

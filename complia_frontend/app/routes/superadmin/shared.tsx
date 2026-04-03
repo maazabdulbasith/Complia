@@ -88,7 +88,34 @@ export type SuperAdminOutletContext = {
   parserStatusFilter: string;
   setParserStatusFilter: Dispatch<SetStateAction<string>>;
   paymentStatusCounts: { initiated: number; abandoned: number; failed: number; success: number };
+  caPanelStatusFilter: "" | "active" | "inactive";
+  setCAPanelStatusFilter: Dispatch<SetStateAction<"" | "active" | "inactive">>;
   actionQueueItems: ActionQueueItem[];
+  handleCAPanelCreate: (payload: {
+    display_name: string;
+    email: string;
+    phone_number: string;
+    icai_membership_number: string;
+    city: string;
+    specialties: string[];
+    turnaround_sla_hours: number;
+    is_active: boolean;
+    notes?: string;
+  }) => Promise<void>;
+  handleCAPanelUpdate: (
+    profileId: number,
+    payload: Partial<{
+      display_name: string;
+      email: string;
+      phone_number: string;
+      icai_membership_number: string;
+      city: string;
+      specialties: string[];
+      turnaround_sla_hours: number;
+      is_active: boolean;
+      notes?: string;
+    }>
+  ) => Promise<void>;
   handleCAUpdate: (
     requestId: number,
     payload: Partial<Pick<AdminCARequest, "status" | "priority" | "assigned_ca" | "assigned_to_email" | "internal_notes">>
@@ -151,6 +178,35 @@ export function EmptyState({ children }: { children: ReactNode }) {
     <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
       {children}
     </p>
+  );
+}
+
+export function AdminPageIntro({
+  eyebrow,
+  title,
+  description,
+  badge,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  badge?: string;
+}) {
+  return (
+    <div className="mb-5 rounded-2xl border border-white/60 bg-white/75 p-5 shadow-sm">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-500">{eyebrow}</p>
+          <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">{title}</h1>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600 sm:text-base">{description}</p>
+        </div>
+        {badge ? (
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
+            {badge}
+          </span>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

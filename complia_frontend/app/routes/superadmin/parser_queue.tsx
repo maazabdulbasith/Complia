@@ -1,5 +1,5 @@
 import type { ParserJob } from "../../api/client";
-import { EmptyState, SectionHeader, useSuperAdmin } from "./shared";
+import { AdminPageIntro, EmptyState, SectionHeader, useSuperAdmin } from "./shared";
 
 export default function SuperAdminParserQueuePage() {
   const {
@@ -15,6 +15,12 @@ export default function SuperAdminParserQueuePage() {
 
   return (
     <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">
+      <AdminPageIntro
+        eyebrow="SuperAdmin / Parser Queue"
+        title="Parser Review Queue"
+        description="Approve low-confidence parser jobs, track benchmark quality, and make sure uploaded notice understanding stays trustworthy."
+        badge="Parser ops"
+      />
       <SectionHeader title="Parser Queue" count={parserJobs.length}>
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -79,10 +85,10 @@ export default function SuperAdminParserQueuePage() {
             <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
               <div>
                 <p className="font-semibold text-slate-900">
-                  #{item.id} · {item.original_filename}
+                  #{item.id} Â· {item.original_filename}
                 </p>
                 <p className="text-sm text-slate-500">
-                  {item.notice_code || "Unknown"} · Confidence {Math.round(item.confidence * 100)}%
+                  {item.notice_code || "Unknown"} Â· Confidence {Math.round(item.confidence * 100)}%
                 </p>
               </div>
               <p className="text-xs text-slate-500">{new Date(item.created_at).toLocaleString()}</p>
@@ -131,3 +137,4 @@ export default function SuperAdminParserQueuePage() {
     </section>
   );
 }
+

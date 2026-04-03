@@ -1,10 +1,16 @@
-import { OverviewActionLink, SectionHeader, StatCard, useSuperAdmin } from "./shared";
+import { AdminPageIntro, OverviewActionLink, SectionHeader, StatCard, useSuperAdmin } from "./shared";
 
 export default function SuperAdminOverviewPage() {
   const { metrics, funnel, kpis, windowSize, setWindowSize, actionQueueItems } = useSuperAdmin();
 
   return (
     <>
+      <AdminPageIntro
+        eyebrow="SuperAdmin / Overview"
+        title="Operations Overview"
+        description="Track live traffic, conversion flow, and what needs attention first across payments, parser, support, and content reliability."
+        badge="Control room"
+      />
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Visitors Till Date" value={metrics.total_visitors} accent="text-indigo-600" />
         <StatCard label="Visitors Today" value={metrics.visitors_today} accent="text-cyan-600" />
@@ -87,3 +93,4 @@ export default function SuperAdminOverviewPage() {
     </>
   );
 }
+

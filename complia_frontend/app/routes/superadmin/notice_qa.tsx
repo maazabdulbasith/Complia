@@ -1,4 +1,7 @@
-import { EmptyState, SectionHeader, useSuperAdmin } from "./shared";
+import { useEffect } from "react";
+import { useSearchParams } from "react-router";
+
+import { AdminPageIntro, EmptyState, SectionHeader, useSuperAdmin } from "./shared";
 
 const reviewTone: Record<"watch" | "trusted" | "needs_review", string> = {
   watch: "bg-amber-100 text-amber-800",
@@ -16,9 +19,28 @@ export default function SuperAdminNoticeQaPage() {
     handleCsvExport,
     handleNoticeQaUpdate,
   } = useSuperAdmin();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const status = (
+      searchParams.get("status") || ""
+    ) as "" | "stale" | "unverified" | "needs_review" | "missing_source" | "trusted" | "watch" | "source_error";
+    if (
+      ["", "stale", "unverified", "needs_review", "missing_source", "trusted", "watch", "source_error"].includes(status) &&
+      status !== noticeQaFilter
+    ) {
+      setNoticeQaFilter(status);
+    }
+  }, [noticeQaFilter, searchParams, setNoticeQaFilter]);
 
   return (
     <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">
+      <AdminPageIntro
+        eyebrow="SuperAdmin / Notice QA"
+        title="Notice Content Reliability"
+        description="Review only the notices that are stale, missing source references, or flagged by automated source monitoring."
+        badge="Trust layer"
+      />
       <SectionHeader title="Notice Content QA" count={noticeQaItems.length}>
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -56,10 +78,10 @@ export default function SuperAdminNoticeQaPage() {
             <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
               <div>
                 <p className="font-semibold text-slate-900">
-                  {item.code} · {item.title}
+                  {item.code} Â· {item.title}
                 </p>
                 <p className="text-sm text-slate-500">
-                  Severity: {item.severity} · {item.is_stale ? "Stale" : "Fresh"} · {item.is_active ? "Active" : "Inactive"}
+                  Severity: {item.severity} Â· {item.is_stale ? "Stale" : "Fresh"} Â· {item.is_active ? "Active" : "Inactive"}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${reviewTone[item.review_status]}`}>
@@ -166,3 +188,4 @@ export default function SuperAdminNoticeQaPage() {
     </section>
   );
 }
+

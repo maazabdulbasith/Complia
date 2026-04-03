@@ -1,5 +1,5 @@
 import type { AdminFeedbackItem } from "../../api/client";
-import { EmptyState, SectionHeader, useSuperAdmin } from "./shared";
+import { AdminPageIntro, EmptyState, SectionHeader, useSuperAdmin } from "./shared";
 
 export default function SuperAdminFeedbackPage() {
   const {
@@ -14,6 +14,12 @@ export default function SuperAdminFeedbackPage() {
 
   return (
     <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">
+      <AdminPageIntro
+        eyebrow="SuperAdmin / Feedback"
+        title="Feedback Inbox"
+        description="Review user sentiment, capture product gaps, and turn repeated pain points into concrete fixes without losing context."
+        badge="Voice of user"
+      />
       <SectionHeader title="Feedback" count={feedbackItems.length}>
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -43,7 +49,7 @@ export default function SuperAdminFeedbackPage() {
             <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
               <div>
                 <p className="break-words font-semibold text-slate-900">
-                  {item.notice_code} · {item.notice_title}
+                  {item.notice_code} Â· {item.notice_title}
                 </p>
                 <p className="text-sm text-slate-500">Helpful: {item.is_helpful ? "Yes" : "No"}</p>
               </div>
@@ -84,3 +90,4 @@ export default function SuperAdminFeedbackPage() {
     </section>
   );
 }
+

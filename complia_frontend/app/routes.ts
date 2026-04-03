@@ -16,6 +16,7 @@ export default [
         route("notice-qa", "routes/superadmin/notice_qa.tsx"),
         route("parser-queue", "routes/superadmin/parser_queue.tsx"),
         route("ca-requests", "routes/superadmin/ca_requests.tsx"),
+        route("ca-panel", "routes/superadmin/ca_panel.tsx"),
         route("feedback", "routes/superadmin/feedback.tsx"),
     ]),
     route("ca-help", "routes/ca_help.tsx"),

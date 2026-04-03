@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 
 import {
+  createAdminCAPanelProfile,
   downloadAdminCsvReport,
   getAdminCAPanel,
   getAdminAssistedIntents,
@@ -15,6 +16,7 @@ import {
   getSuperAdminKpis,
   getSuperAdminMetrics,
   grantAdminPaymentCredits,
+  updateAdminCAPanelProfile,
   updateAdminAssistedIntent,
   updateAdminCARequest,
   updateAdminFeedbackItem,
@@ -68,6 +70,7 @@ export default function SuperAdminLayout() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [caStatusFilter, setCAStatusFilter] = useState("");
   const [feedbackStatusFilter, setFeedbackStatusFilter] = useState("");
+  const [caPanelStatusFilter, setCAPanelStatusFilter] = useState<"" | "active" | "inactive">("");
   const [assistedStatusFilter, setAssistedStatusFilter] = useState("");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState("");
   const [noticeQaFilter, setNoticeQaFilter] = useState<
@@ -181,6 +184,33 @@ export default function SuperAdminLayout() {
     }
   };
 
+  const handleCAPanelCreate: SuperAdminOutletContext["handleCAPanelCreate"] = async (payload) => {
+    setSavingKey("ca-panel-create");
+    try {
+      const created = await createAdminCAPanelProfile(payload);
+      setCAPanel((prev) => [...prev, created].sort((a, b) => a.display_name.localeCompare(b.display_name)));
+      trackEvent("admin_ca_panel_updated", { action: "created", profile_id: created.id });
+    } catch {
+      setError("Failed to create CA panel profile. Please retry.");
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const handleCAPanelUpdate: SuperAdminOutletContext["handleCAPanelUpdate"] = async (profileId, payload) => {
+    const key = `ca-panel-${profileId}`;
+    setSavingKey(key);
+    try {
+      const updated = await updateAdminCAPanelProfile(profileId, payload);
+      setCAPanel((prev) => prev.map((item) => (item.id === profileId ? updated : item)).sort((a, b) => a.display_name.localeCompare(b.display_name)));
+      trackEvent("admin_ca_panel_updated", { action: "updated", profile_id: profileId });
+    } catch {
+      setError("Failed to update CA panel profile. Please retry.");
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
   const handleFeedbackUpdate: SuperAdminOutletContext["handleFeedbackUpdate"] = async (feedbackId, payload) => {
     const key = `fb-${feedbackId}`;
     setSavingKey(key);
@@ -287,6 +317,30 @@ export default function SuperAdminLayout() {
     ];
   }, [assistedIntents, caRequests, feedbackItems, parserJobs, paymentStatusCounts]);
 
+  const triageLinks = useMemo(
+    () => [
+      {
+        id: "notice-review",
+        label: "Notice review needed",
+        count: noticeQaItems.filter((item) => item.review_status === "needs_review").length,
+        to: "/superadmin/notice-qa?status=needs_review",
+      },
+      {
+        id: "source-missing",
+        label: "Missing source URLs",
+        count: noticeQaItems.filter((item) => !item.source_url).length,
+        to: "/superadmin/notice-qa?status=missing_source",
+      },
+      {
+        id: "ca-panel-inactive",
+        label: "Inactive CAs",
+        count: caPanel.filter((item) => !item.is_active).length,
+        to: "/superadmin/ca-panel?status=inactive",
+      },
+    ],
+    [caPanel, noticeQaItems]
+  );
+
   const sectionNavItems = useMemo<AdminSectionNavItem[]>(() => [
     { id: "overview", label: "Overview", to: "/superadmin" },
     { id: "payments", label: "Payments", to: "/superadmin/payments", count: paymentOrders.length },
@@ -294,8 +348,9 @@ export default function SuperAdminLayout() {
     { id: "notice-qa", label: "Notice QA", to: "/superadmin/notice-qa", count: noticeQaItems.length },
     { id: "parser-queue", label: "Parser Queue", to: "/superadmin/parser-queue", count: parserJobs.length },
     { id: "ca-requests", label: "CA Requests", to: "/superadmin/ca-requests", count: caRequests.length },
+    { id: "ca-panel", label: "CA Panel", to: "/superadmin/ca-panel", count: caPanel.length },
     { id: "feedback", label: "Feedback", to: "/superadmin/feedback", count: feedbackItems.length },
-  ], [assistedIntents.length, caRequests.length, feedbackItems.length, noticeQaItems.length, parserJobs.length, paymentOrders.length]);
+  ], [assistedIntents.length, caPanel.length, caRequests.length, feedbackItems.length, noticeQaItems.length, parserJobs.length, paymentOrders.length]);
 
   const outletContext: SuperAdminOutletContext | null = metrics
     ? {
@@ -328,7 +383,11 @@ export default function SuperAdminLayout() {
         parserStatusFilter,
         setParserStatusFilter,
         paymentStatusCounts,
+        caPanelStatusFilter,
+        setCAPanelStatusFilter,
         actionQueueItems,
+        handleCAPanelCreate,
+        handleCAPanelUpdate,
         handleCAUpdate,
         handleFeedbackUpdate,
         handleAssistedIntentUpdate,
@@ -431,6 +490,36 @@ export default function SuperAdminLayout() {
                         )}
                       </NavLink>
                     ))}
+                  </div>
+                  <div className="mt-5 border-t border-slate-200 pt-4">
+                    <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Quick Triage</p>
+                    <div className="space-y-2">
+                      {actionQueueItems.map((item) => (
+                        <NavLink
+                          key={item.id}
+                          to={item.to}
+                          className={`flex items-center justify-between rounded-lg border px-3 py-2 text-xs font-semibold transition hover:-translate-y-0.5 ${item.tone}`}
+                        >
+                          <span className="max-w-[160px] leading-tight">{item.label}</span>
+                          <span className="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-black">{item.count}</span>
+                        </NavLink>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-5 border-t border-slate-200 pt-4">
+                    <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Fast Filters</p>
+                    <div className="space-y-2">
+                      {triageLinks.map((item) => (
+                        <NavLink
+                          key={item.id}
+                          to={item.to}
+                          className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-indigo-50 hover:text-indigo-700"
+                        >
+                          <span className="max-w-[160px] leading-tight">{item.label}</span>
+                          <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-[11px] font-black text-slate-900">{item.count}</span>
+                        </NavLink>
+                      ))}
+                    </div>
                   </div>
                 </nav>
               </aside>

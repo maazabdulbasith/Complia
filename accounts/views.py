@@ -333,11 +333,20 @@ class MyCAHelpRequestListView(generics.ListAPIView):
         return queryset.order_by("-created_at")
 
 
-class AdminCAPanelListView(generics.ListAPIView):
+class SuperAdminCAPanelViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
     serializer_class = CAPanelProfileSerializer
     permission_classes = [IsSuperAdmin]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "admin_ops"
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["display_name", "email", "city", "icai_membership_number", "notes"]
+    ordering_fields = ["display_name", "city", "turnaround_sla_hours", "updated_at", "created_at"]
+    ordering = ["display_name", "email"]
 
     def get_queryset(self):
         eligible_users = User.objects.filter(user_type="ca", is_verified_ca=True).exclude(email="")
@@ -356,7 +365,13 @@ class AdminCAPanelListView(generics.ListAPIView):
                     "is_active": True,
                 },
             )
-        return CAPanelProfile.objects.filter(is_active=True).order_by("display_name", "email")
+        queryset = CAPanelProfile.objects.select_related("user").all()
+        status_filter = (self.request.query_params.get("status") or "").strip()
+        if status_filter == "active":
+            queryset = queryset.filter(is_active=True)
+        elif status_filter == "inactive":
+            queryset = queryset.filter(is_active=False)
+        return queryset.order_by("display_name", "email")
 
 
 class AnalyticsEventCreateView(generics.CreateAPIView):

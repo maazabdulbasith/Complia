@@ -166,6 +166,8 @@ export type AdminCARequest = {
 
 export type CAPanelProfile = {
   id: number;
+  user?: number | null;
+  user_email?: string;
   display_name: string;
   email: string;
   phone_number: string;
@@ -174,6 +176,7 @@ export type CAPanelProfile = {
   specialties: string[];
   turnaround_sla_hours: number;
   is_active: boolean;
+  notes?: string;
 };
 
 export type SafeCARequest = {
@@ -863,6 +866,43 @@ export async function getAdminCAPanel(): Promise<CAPanelProfile[]> {
     return data.results;
   }
   throw new Error("Unexpected CA panel response format");
+}
+
+export async function createAdminCAPanelProfile(
+  payload: Pick<
+    CAPanelProfile,
+    "display_name" | "email" | "phone_number" | "icai_membership_number" | "city" | "specialties" | "turnaround_sla_hours" | "is_active"
+  > & { notes?: string; user?: number | null }
+): Promise<CAPanelProfile> {
+  const response = await fetchWithAuth(`${API_BASE}/admin/ca-panel/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Failed to create CA panel profile"));
+  }
+  return response.json();
+}
+
+export async function updateAdminCAPanelProfile(
+  profileId: number,
+  payload: Partial<
+    Pick<
+      CAPanelProfile,
+      "display_name" | "email" | "phone_number" | "icai_membership_number" | "city" | "specialties" | "turnaround_sla_hours" | "is_active"
+    > & { notes?: string; user?: number | null }
+  >
+): Promise<CAPanelProfile> {
+  const response = await fetchWithAuth(`${API_BASE}/admin/ca-panel/${profileId}/`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Failed to update CA panel profile"));
+  }
+  return response.json();
 }
 
 export async function updateAdminCARequest(
