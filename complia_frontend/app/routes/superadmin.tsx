@@ -69,6 +69,12 @@ function PaymentStatusPill({ status }: { status: AdminPaymentOrder["admin_status
   );
 }
 
+type AdminSectionNavItem = {
+  id: string;
+  label: string;
+  count?: number;
+};
+
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
@@ -94,6 +100,7 @@ export default function SuperAdminDashboard() {
   const [noticeQaFilter, setNoticeQaFilter] = useState<"" | "stale" | "unverified">("");
   const [parserStatusFilter, setParserStatusFilter] = useState<string>("");
   const [exportingReport, setExportingReport] = useState<AdminCsvReportKey | null>(null);
+  const [activeSection, setActiveSection] = useState("overview");
 
   const user = useMemo(() => {
     const raw = localStorage.getItem("user");
@@ -313,6 +320,19 @@ export default function SuperAdminDashboard() {
     );
   }, [paymentOrders]);
 
+  const sectionNavItems = useMemo<AdminSectionNavItem[]>(
+    () => [
+      { id: "overview", label: "Overview" },
+      { id: "payments", label: "Payments", count: paymentOrders.length },
+      { id: "assisted-intents", label: "Assisted Intents", count: assistedIntents.length },
+      { id: "notice-qa", label: "Notice QA", count: noticeQaItems.length },
+      { id: "parser-queue", label: "Parser Queue", count: parserJobs.length },
+      { id: "ca-requests", label: "CA Requests", count: caRequests.length },
+      { id: "feedback", label: "Feedback", count: feedbackItems.length },
+    ],
+    [assistedIntents.length, caRequests.length, feedbackItems.length, noticeQaItems.length, parserJobs.length, paymentOrders.length]
+  );
+
   const handleGrantCredits = async (orderId: string) => {
     setSavingKey(`payment-${orderId}`);
     setError(null);
@@ -326,12 +346,51 @@ export default function SuperAdminDashboard() {
     }
   };
 
+  useEffect(() => {
+    const sections = sectionNavItems
+      .map((item) => document.getElementById(item.id))
+      .filter((element): element is HTMLElement => Boolean(element));
+
+    if (sections.length === 0) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+
+        if (visible.length > 0) {
+          setActiveSection(visible[0].target.id);
+        }
+      },
+      {
+        rootMargin: "-15% 0px -60% 0px",
+        threshold: [0.15, 0.4, 0.7],
+      }
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [sectionNavItems]);
+
+  const handleSectionJump = (sectionId: string) => {
+    const section = document.getElementById(sectionId);
+    if (!section) {
+      return;
+    }
+
+    setActiveSection(sectionId);
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-slate-100 via-indigo-50 to-cyan-50 text-slate-900">
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
         <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
-            <BrandMark to="/" imageClassName="h-9 w-auto" />
+            <BrandMark to="/" imageClassName="h-9 w-9" />
             <p className="text-xs uppercase tracking-[0.2em] text-indigo-500 font-bold">Complia Operations</p>
             <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">SuperAdmin Command Center</h1>
             <p className="text-slate-600 mt-2">Complete in-app operations inbox. No Django admin required.</p>
@@ -385,20 +444,60 @@ export default function SuperAdminDashboard() {
           </div>
         ) : metrics ? (
           <>
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[220px_minmax(0,1fr)]">
-              <aside className="xl:sticky xl:top-6 xl:self-start">
-                <nav className="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur">
+            <div className="lg:hidden sticky top-2 z-20 mb-4 -mx-1 overflow-x-auto pb-1">
+              <div className="inline-flex min-w-full gap-2 rounded-2xl border border-white/70 bg-white/90 p-2 shadow-sm backdrop-blur">
+                {sectionNavItems.map((item) => {
+                  const isActive = item.id === activeSection;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleSectionJump(item.id)}
+                      className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                        isActive
+                          ? "bg-indigo-600 text-white"
+                          : "bg-slate-50 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
+              <aside className="lg:sticky lg:top-4 lg:self-start">
+                <nav className="rounded-2xl border border-white/60 bg-white/85 p-4 shadow-sm backdrop-blur lg:max-h-[calc(100vh-1.5rem)] lg:overflow-auto">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 mb-3">
                     Sections
                   </p>
                   <div className="space-y-1.5 text-sm font-semibold text-slate-700">
-                    <a href="#overview" className="block rounded-lg px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700">Overview</a>
-                    <a href="#payments" className="block rounded-lg px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700">Payments</a>
-                    <a href="#assisted-intents" className="block rounded-lg px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700">Assisted Intents</a>
-                    <a href="#notice-qa" className="block rounded-lg px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700">Notice QA</a>
-                    <a href="#parser-queue" className="block rounded-lg px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700">Parser Queue</a>
-                    <a href="#ca-requests" className="block rounded-lg px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700">CA Requests</a>
-                    <a href="#feedback" className="block rounded-lg px-3 py-2 hover:bg-indigo-50 hover:text-indigo-700">Feedback</a>
+                    {sectionNavItems.map((item) => {
+                      const isActive = item.id === activeSection;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleSectionJump(item.id)}
+                          className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition ${
+                            isActive
+                              ? "bg-indigo-600 text-white shadow-sm"
+                              : "hover:bg-indigo-50 hover:text-indigo-700"
+                          }`}
+                        >
+                          <span>{item.label}</span>
+                          {typeof item.count === "number" && (
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                                isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                              }`}
+                            >
+                              {item.count}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </nav>
               </aside>
