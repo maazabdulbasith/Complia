@@ -23,6 +23,7 @@ from .models import (
     AnalyticsEvent,
     AssistedOffer,
     AssistedIntent,
+    CAPanelProfile,
     CAHelpRequest,
     ExperimentExposure,
     PaymentOrder,
@@ -41,6 +42,7 @@ from .serializers import (
     AnalyticsEventSerializer,
     AssistedOfferSerializer,
     AssistedIntentSerializer,
+    CAPanelProfileSerializer,
     CAHelpRequestSerializer,
     ExperimentExposureSerializer,
     PaymentOrderCreateSerializer,
@@ -311,7 +313,34 @@ class CAHelpRequestCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         user = self.request.user if self.request.user.is_authenticated else None
-        serializer.save(user=user)
+        serializer.save(
+            user=user,
+            consent_recorded_at=timezone.now(),
+        )
+
+
+class MyCAHelpRequestListView(generics.ListAPIView):
+    serializer_class = CAHelpRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ca_help"
+
+    def get_queryset(self):
+        queryset = CAHelpRequest.objects.filter(user=self.request.user).select_related("assigned_ca")
+        notice_code = (self.request.query_params.get("notice_code") or "").strip()
+        if notice_code:
+            queryset = queryset.filter(notice_code=notice_code)
+        return queryset.order_by("-created_at")
+
+
+class AdminCAPanelListView(generics.ListAPIView):
+    serializer_class = CAPanelProfileSerializer
+    permission_classes = [IsSuperAdmin]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "admin_ops"
+
+    def get_queryset(self):
+        return CAPanelProfile.objects.filter(is_active=True).order_by("display_name", "email")
 
 
 class AnalyticsEventCreateView(generics.CreateAPIView):
@@ -1004,7 +1033,7 @@ class SuperAdminCsvExportView(generics.GenericAPIView):
         )
 
     def _export_ca_requests(self, request):
-        queryset = CAHelpRequest.objects.all().order_by("-created_at")
+        queryset = CAHelpRequest.objects.select_related("assigned_ca").all().order_by("-created_at")
         status_filter = (request.query_params.get("status") or "").strip()
         if status_filter:
             queryset = queryset.filter(status=status_filter)
@@ -1016,16 +1045,40 @@ class SuperAdminCsvExportView(generics.GenericAPIView):
                 item.name,
                 item.email,
                 item.phone_number or "",
+                "yes" if item.consent_to_share_with_ca else "no",
                 item.status,
                 item.priority,
+                item.assigned_ca.display_name if item.assigned_ca else "",
                 item.assigned_to_email or "",
+                item.assigned_at.isoformat() if item.assigned_at else "",
+                item.shared_case_materials_at.isoformat() if item.shared_case_materials_at else "",
+                item.contacted_at.isoformat() if item.contacted_at else "",
+                item.engaged_at.isoformat() if item.engaged_at else "",
+                item.closed_at.isoformat() if item.closed_at else "",
                 item.created_at.isoformat(),
             ]
             for item in queryset
         ]
         return _csv_response(
             "complia_ca_requests.csv",
-            ["id", "notice_code", "name", "email", "phone_number", "status", "priority", "assigned_to", "created_at"],
+            [
+                "id",
+                "notice_code",
+                "name",
+                "email",
+                "phone_number",
+                "consent_to_share_with_ca",
+                "status",
+                "priority",
+                "assigned_ca",
+                "assigned_to",
+                "assigned_at",
+                "shared_case_materials_at",
+                "contacted_at",
+                "engaged_at",
+                "closed_at",
+                "created_at",
+            ],
             rows,
         )
 
@@ -1193,18 +1246,40 @@ class SuperAdminCAHelpRequestViewSet(
     def perform_update(self, serializer):
         instance = serializer.instance
         old_status = instance.status
+        old_assigned_email = instance.assigned_to_email
+        old_assigned_ca_id = instance.assigned_ca_id
         updated = serializer.save()
 
+        updates = []
+        if updated.consent_to_share_with_ca and not updated.consent_recorded_at:
+            updated.consent_recorded_at = timezone.now()
+            updates.append("consent_recorded_at")
+        if updated.assigned_ca_id and updated.assigned_ca_id != old_assigned_ca_id:
+            updated.assigned_to_email = updated.assigned_ca.email
+            updates.append("assigned_to_email")
+        if updated.assigned_to_email and updated.assigned_to_email != old_assigned_email and not updated.assigned_at:
+            updated.assigned_at = timezone.now()
+            updates.append("assigned_at")
+        if (
+            updated.consent_to_share_with_ca
+            and updated.assigned_to_email
+            and updated.status in {"assigned", "contacted", "engaged", "resolved", "closed"}
+            and not updated.shared_case_materials_at
+        ):
+            updated.shared_case_materials_at = timezone.now()
+            updates.append("shared_case_materials_at")
         if old_status != updated.status:
-            updates = []
             if updated.status == "contacted" and not updated.contacted_at:
                 updated.contacted_at = timezone.now()
                 updates.append("contacted_at")
+            if updated.status == "engaged" and not updated.engaged_at:
+                updated.engaged_at = timezone.now()
+                updates.append("engaged_at")
             if updated.status in {"resolved", "closed"} and not updated.closed_at:
                 updated.closed_at = timezone.now()
                 updates.append("closed_at")
-            if updates:
-                updated.save(update_fields=updates)
+        if updates:
+            updated.save(update_fields=updates)
 
 
 class SuperAdminAssistedIntentViewSet(

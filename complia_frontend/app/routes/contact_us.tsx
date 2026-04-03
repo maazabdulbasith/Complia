@@ -62,6 +62,21 @@ export default function ContactUsPage() {
               <li>Issue details and screenshot (if any)</li>
             </ul>
           </div>
+
+          <div>
+            <h2 className="font-display text-xl font-bold text-slate-900">CA handoff escalation</h2>
+            <p className="mt-2">
+              If you requested CA help and need an assignment update, consent withdrawal before
+              assignment, or service-quality escalation, email{" "}
+              <a
+                href="mailto:admin@complia.in"
+                className="font-semibold text-blue-700 transition hover:text-blue-800 hover:underline"
+              >
+                admin@complia.in
+              </a>{" "}
+              with your registered email and notice code.
+            </p>
+          </div>
         </section>
 
         <div className="mt-8 border-t border-slate-200 pt-5 text-sm text-slate-600">

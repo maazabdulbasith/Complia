@@ -23,6 +23,7 @@ export default function CAHelpPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [noticeCode, setNoticeCode] = useState(prefillNoticeCode);
   const [message, setMessage] = useState("");
+  const [consentToShare, setConsentToShare] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,12 +47,12 @@ export default function CAHelpPage() {
     });
   }, [prefillNoticeCode]);
 
-  const isFormValid = name.trim().length > 1 && email.trim().length > 3;
+  const isFormValid = name.trim().length > 1 && email.trim().length > 3 && consentToShare;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isFormValid) {
-      setError("Please enter your name and email to continue.");
+      setError("Please complete your details and consent to CA handoff to continue.");
       return;
     }
 
@@ -66,6 +67,7 @@ export default function CAHelpPage() {
         email: email.trim(),
         phone_number: phoneNumber.trim(),
         message: message.trim(),
+        consent_to_share_with_ca: consentToShare,
       });
       trackEvent("ca_help_submitted", { notice_code: noticeCode || "general" });
       setSuccess("Request submitted. A CA expert will contact you shortly.");
@@ -98,13 +100,23 @@ export default function CAHelpPage() {
           <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm font-semibold text-slate-900">What happens next?</p>
             <p className="mt-1 text-sm text-slate-600">
-              Submit this form and a CA specialist reviews your notice context, then contacts you to plan response steps.
+              Submit this form and Complia will route your case to one assigned CA so they can review your notice context and contact you with next steps.
             </p>
             {prefillNoticeCode && (
               <p className="mt-2 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
                 Prefilled notice: {prefillNoticeCode}
               </p>
             )}
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/80 p-4">
+            <p className="text-sm font-semibold text-slate-900">How this handoff works</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+              <li>Complia collects your request, notice code, and case context.</li>
+              <li>We assign one CA contact instead of broadcasting your case widely.</li>
+              <li>The CA&apos;s professional fees and scope are agreed separately between you and the CA.</li>
+              <li>Complia tracks assignment, contact, and resolution status for service quality and support.</li>
+            </ul>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -163,6 +175,18 @@ export default function CAHelpPage() {
             />
             <p className="mt-1 text-xs text-slate-500">Tip: include deadline date and claimed amount for faster triage.</p>
           </div>
+
+          <label className="mt-4 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <input
+              type="checkbox"
+              checked={consentToShare}
+              onChange={(e) => setConsentToShare(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-200"
+            />
+            <span className="text-sm leading-6 text-slate-700">
+              I authorize Complia to share my name, contact details, notice code, message, and related case summary with one assigned CA for follow-up on this request.
+            </span>
+          </label>
 
           {error && <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
           {success && (

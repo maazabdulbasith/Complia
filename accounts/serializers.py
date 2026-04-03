@@ -8,6 +8,7 @@ from .models import (
     AnalyticsEvent,
     AssistedOffer,
     AssistedIntent,
+    CAPanelProfile,
     CAHelpRequest,
     ExperimentExposure,
     PaymentOrder,
@@ -48,22 +49,31 @@ class CAHelpRequestSerializer(serializers.ModelSerializer):
             "email",
             "phone_number",
             "message",
+            "consent_to_share_with_ca",
+            "consent_recorded_at",
             "status",
             "priority",
             "assigned_to_email",
+            "assigned_at",
+            "shared_case_materials_at",
             "internal_notes",
             "contacted_at",
+            "engaged_at",
             "closed_at",
             "created_at",
             "updated_at",
         ]
         read_only_fields = [
             "id",
+            "consent_recorded_at",
             "status",
             "priority",
             "assigned_to_email",
+            "assigned_at",
+            "shared_case_materials_at",
             "internal_notes",
             "contacted_at",
+            "engaged_at",
             "closed_at",
             "created_at",
             "updated_at",
@@ -87,6 +97,24 @@ class CAHelpRequestSerializer(serializers.ModelSerializer):
         if not normalized.isdigit() or not 10 <= len(normalized) <= 15:
             raise serializers.ValidationError("Phone number must be 10 to 15 digits.")
         return cleaned
+
+    def validate_notice_code(self, value):
+        return (value or "").strip()
+
+    def validate_message(self, value):
+        return (value or "").strip()
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not attrs.get("consent_to_share_with_ca"):
+            raise serializers.ValidationError(
+                {
+                    "consent_to_share_with_ca": [
+                        "Please confirm that Complia may share this case with one assigned CA."
+                    ]
+                }
+            )
+        return attrs
 
 
 class AnalyticsEventSerializer(serializers.ModelSerializer):
@@ -144,6 +172,8 @@ class AnalyticsEventSerializer(serializers.ModelSerializer):
 
 
 class AdminCAHelpRequestSerializer(serializers.ModelSerializer):
+    assigned_ca_name = serializers.CharField(source="assigned_ca.display_name", read_only=True)
+
     class Meta:
         model = CAHelpRequest
         fields = [
@@ -153,16 +183,40 @@ class AdminCAHelpRequestSerializer(serializers.ModelSerializer):
             "email",
             "phone_number",
             "message",
+            "consent_to_share_with_ca",
+            "consent_recorded_at",
             "status",
             "priority",
+            "assigned_ca",
+            "assigned_ca_name",
             "assigned_to_email",
+            "assigned_at",
+            "shared_case_materials_at",
             "internal_notes",
             "contacted_at",
+            "engaged_at",
             "closed_at",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class CAPanelProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CAPanelProfile
+        fields = [
+            "id",
+            "display_name",
+            "email",
+            "phone_number",
+            "icai_membership_number",
+            "city",
+            "specialties",
+            "turnaround_sla_hours",
+            "is_active",
+        ]
+        read_only_fields = fields
 
 
 class AssistedIntentSerializer(serializers.ModelSerializer):

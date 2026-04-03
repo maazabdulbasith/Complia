@@ -78,7 +78,18 @@ export default function TermsAndConditionsPage() {
           </div>
 
           <div>
-            <h2 className="font-display text-xl font-bold text-slate-900">5. Intellectual Property</h2>
+            <h2 className="font-display text-xl font-bold text-slate-900">5. CA Handoff and Professional Services</h2>
+            <p className="mt-2">
+              If you request CA help, you authorize Complia to share your case details with one
+              assigned CA or tax professional contact. Complia acts as a platform and intake layer,
+              not as the professional advisor of record. Any professional engagement, fee quote,
+              filing work, drafting work, or representation is a separate arrangement between you
+              and the CA unless Complia expressly states otherwise in writing.
+            </p>
+          </div>
+
+          <div>
+            <h2 className="font-display text-xl font-bold text-slate-900">6. Intellectual Property</h2>
             <p className="mt-2">
               Platform content, branding, and software are owned by Complia or licensed to Complia.
               You may not copy, reverse engineer, or redistribute proprietary assets without written
@@ -87,16 +98,17 @@ export default function TermsAndConditionsPage() {
           </div>
 
           <div>
-            <h2 className="font-display text-xl font-bold text-slate-900">6. Limitation of Liability</h2>
+            <h2 className="font-display text-xl font-bold text-slate-900">7. Limitation of Liability</h2>
             <p className="mt-2">
               To the maximum extent permitted by law, Complia is not liable for indirect or
               consequential losses arising from platform use, notice interpretation outcomes, missed
-              deadlines, or third-party service failures.
+              deadlines, third-party service failures, or professional advice and fees agreed
+              directly between a user and an assigned CA.
             </p>
           </div>
 
           <div>
-            <h2 className="font-display text-xl font-bold text-slate-900">7. Account Suspension</h2>
+            <h2 className="font-display text-xl font-bold text-slate-900">8. Account Suspension</h2>
             <p className="mt-2">
               Complia may suspend or terminate access for abusive behavior, fraud, policy
               violations, or legal compliance requirements.
@@ -104,7 +116,7 @@ export default function TermsAndConditionsPage() {
           </div>
 
           <div>
-            <h2 className="font-display text-xl font-bold text-slate-900">8. Changes to Terms</h2>
+            <h2 className="font-display text-xl font-bold text-slate-900">9. Changes to Terms</h2>
             <p className="mt-2">
               Terms may be updated from time to time. Continued use after updates constitutes
               acceptance of revised terms.

@@ -53,7 +53,10 @@ export default function CancellationPolicyPage() {
             <h2 className="font-display text-xl font-bold text-slate-900">2. Service-Level Cancellation</h2>
             <p className="mt-2">
               If a paid workflow is cancelled before meaningful service delivery, handling will
-              follow the Refund Policy and transaction verification process.
+              follow the Refund Policy and transaction verification process. CA handoff requests may
+              be cancelled before assignment by contacting support. After assignment or contact has
+              begun, any professional engagement with the CA is governed separately between the user
+              and the CA.
             </p>
           </div>
 

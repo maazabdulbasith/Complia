@@ -63,7 +63,8 @@ export default function RefundPolicyPage() {
             <p className="mt-2">
               No refund is typically provided for completed digital delivery, user-side upload/input
               errors, or subjective dissatisfaction where service was materially delivered as
-              described.
+              described. Professional fees or invoices charged by a CA after case handoff are not
+              Complia payments and are handled separately between the user and the CA.
             </p>
           </div>
 

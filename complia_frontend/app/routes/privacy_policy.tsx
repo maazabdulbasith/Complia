@@ -63,7 +63,10 @@ export default function PrivacyPolicyPage() {
             <h2 className="font-display text-xl font-bold text-slate-900">3. Data Sharing</h2>
             <p className="mt-2">
               We do not sell personal data. We may share data with trusted processors (hosting,
-              analytics, payment providers) only for service delivery and legal obligations.
+              analytics, payment providers) only for service delivery and legal obligations. If you
+              request CA help, we may share your name, contact details, notice code, message, and
+              related case summary with one assigned CA or tax professional contact so they can
+              review and follow up on your request.
             </p>
           </div>
 
@@ -80,7 +83,9 @@ export default function PrivacyPolicyPage() {
             <p className="mt-2">
               Data retention is limited to business, legal, and operational necessity. Uploaded
               parser artifacts may be processed under short-lived storage rules as configured in the
-              platform.
+              platform. We may also retain case-handoff audit logs, including consent capture,
+              assignment, and follow-up timestamps, to support dispute handling, service quality,
+              and legal compliance.
             </p>
           </div>
 
@@ -88,7 +93,9 @@ export default function PrivacyPolicyPage() {
             <h2 className="font-display text-xl font-bold text-slate-900">6. Your Rights</h2>
             <p className="mt-2">
               Subject to applicable law, you may request access, correction, or deletion of personal
-              information. Certain records may be retained where legally required.
+              information. If you requested CA handoff, you may ask us to stop sharing your case
+              before assignment; after assignment or follow-up has started, some operational records
+              may still need to be retained where legally or operationally required.
             </p>
           </div>
 

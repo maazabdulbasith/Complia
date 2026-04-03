@@ -17,6 +17,7 @@ export type SavedNotice = {
   notice: NoticeType;
   parser_job_id?: number | null;
   parser_snapshot?: Record<string, unknown>;
+  ca_request?: SafeCARequest | null;
   action_status?: "not_started" | "in_progress" | "done";
   ca_brief?: string;
   next_steps_checklist?: string[];
@@ -45,6 +46,7 @@ export type CAHelpRequestPayload = {
   email: string;
   phone_number?: string;
   message?: string;
+  consent_to_share_with_ca: boolean;
 };
 
 export type AssistedIntentPayload = {
@@ -122,14 +124,46 @@ export type AdminCARequest = {
   email: string;
   phone_number: string;
   message: string;
-  status: "new" | "triaged" | "contacted" | "resolved" | "closed";
+  consent_to_share_with_ca: boolean;
+  consent_recorded_at: string | null;
+  status: "new" | "triaged" | "assigned" | "contacted" | "engaged" | "resolved" | "closed";
   priority: "low" | "medium" | "high";
+  assigned_ca: number | null;
+  assigned_ca_name: string;
   assigned_to_email: string;
+  assigned_at: string | null;
+  shared_case_materials_at: string | null;
   internal_notes: string;
   contacted_at: string | null;
+  engaged_at: string | null;
   closed_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type CAPanelProfile = {
+  id: number;
+  display_name: string;
+  email: string;
+  phone_number: string;
+  icai_membership_number: string;
+  city: string;
+  specialties: string[];
+  turnaround_sla_hours: number;
+  is_active: boolean;
+};
+
+export type SafeCARequest = {
+  id: number;
+  status: "new" | "triaged" | "assigned" | "contacted" | "engaged" | "resolved" | "closed";
+  priority: "low" | "medium" | "high";
+  assigned_ca_name: string;
+  assigned_to_email: string;
+  assigned_at: string | null;
+  contacted_at: string | null;
+  engaged_at: string | null;
+  closed_at: string | null;
+  created_at: string;
 };
 
 export type AdminFeedbackItem = {
@@ -772,9 +806,24 @@ export async function getAdminCARequests(status?: string): Promise<AdminCAReques
   throw new Error("Unexpected admin CA requests response format");
 }
 
+export async function getAdminCAPanel(): Promise<CAPanelProfile[]> {
+  const response = await fetchWithAuth(`${API_BASE}/admin/ca-panel/`);
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Failed to fetch CA panel"));
+  }
+  const data = await response.json();
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (isPaginatedResponse<CAPanelProfile>(data)) {
+    return data.results;
+  }
+  throw new Error("Unexpected CA panel response format");
+}
+
 export async function updateAdminCARequest(
   requestId: number,
-  payload: Partial<Pick<AdminCARequest, "status" | "priority" | "assigned_to_email" | "internal_notes">>
+  payload: Partial<Pick<AdminCARequest, "status" | "priority" | "assigned_ca" | "assigned_to_email" | "internal_notes">>
 ): Promise<AdminCARequest> {
   const response = await fetchWithAuth(`${API_BASE}/admin/ca-requests/${requestId}/`, {
     method: "PATCH",

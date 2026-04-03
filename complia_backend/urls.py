@@ -20,12 +20,14 @@ from complia_backend.seo import robots_txt, sitemap_xml
 from accounts.views import (
     AssistedOfferConfigView,
     AssistedIntentCreateView,
+    AdminCAPanelListView,
     AnalyticsEventCreateView,
     CashfreeWebhookView,
     CAHelpRequestCreateView,
     ExperimentExposureCreateView,
     GoogleLogin,
     MyEntitlementsView,
+    MyCAHelpRequestListView,
     PaymentOrderCreateView,
     PaymentOrderGrantCreditsView,
     PaymentPlanListView,
@@ -64,6 +66,7 @@ urlpatterns = [
     path('api/v1/', include([
         path('', include(router_v1.urls)),
         path('ca-help/', CAHelpRequestCreateView.as_view(), name='ca-help-create'),
+        path('ca-help/my/', MyCAHelpRequestListView.as_view(), name='ca-help-my-list'),
         path('assisted-offer/', AssistedOfferConfigView.as_view(), name='assisted-offer-config'),
         path('assisted-intent/', AssistedIntentCreateView.as_view(), name='assisted-intent-create'),
         path('payments/plans/', PaymentPlanListView.as_view(), name='payment-plans'),
@@ -79,6 +82,7 @@ urlpatterns = [
         path('admin/metrics/', SuperAdminMetricsView.as_view(), name='superadmin-metrics'),
         path('admin/funnel/', SuperAdminFunnelView.as_view(), name='superadmin-funnel'),
         path('admin/kpis/', SuperAdminKpiView.as_view(), name='superadmin-kpis'),
+        path('admin/ca-panel/', AdminCAPanelListView.as_view(), name='admin-ca-panel'),
         path('admin/exports/<str:report_key>/', SuperAdminCsvExportView.as_view(), name='superadmin-export-csv'),
         path('admin/', include(admin_router_v1.urls)),
         

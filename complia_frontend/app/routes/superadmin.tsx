@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   downloadAdminCsvReport,
+  getAdminCAPanel,
   getAdminAssistedIntents,
   getAdminCARequests,
   getAdminFeedbackItems,
@@ -23,6 +24,7 @@ import {
 import type {
   AdminCsvReportKey,
   AdminAssistedIntent,
+  CAPanelProfile,
   AdminCARequest,
   AdminFeedbackItem,
   AdminFunnel,
@@ -82,6 +84,7 @@ export default function SuperAdminDashboard() {
   const [kpis, setKpis] = useState<AdminKpis | null>(null);
   const [windowSize, setWindowSize] = useState<"7d" | "30d">("7d");
   const [caRequests, setCARequests] = useState<AdminCARequest[]>([]);
+  const [caPanel, setCAPanel] = useState<CAPanelProfile[]>([]);
   const [feedbackItems, setFeedbackItems] = useState<AdminFeedbackItem[]>([]);
   const [assistedIntents, setAssistedIntents] = useState<AdminAssistedIntent[]>([]);
   const [paymentOrders, setPaymentOrders] = useState<AdminPaymentOrder[]>([]);
@@ -124,6 +127,7 @@ export default function SuperAdminDashboard() {
         funnelData,
         kpiData,
         caData,
+        caPanelData,
         feedbackData,
         assistedData,
         paymentData,
@@ -135,6 +139,7 @@ export default function SuperAdminDashboard() {
         getSuperAdminFunnel(windowSize),
         getSuperAdminKpis(windowSize),
         getAdminCARequests(caStatusFilter || undefined),
+        getAdminCAPanel(),
         getAdminFeedbackItems(feedbackStatusFilter || undefined),
         getAdminAssistedIntents(assistedStatusFilter || undefined),
         getAdminPaymentOrders(paymentStatusFilter || undefined),
@@ -146,6 +151,7 @@ export default function SuperAdminDashboard() {
       setFunnel(funnelData);
       setKpis(kpiData);
       setCARequests(caData);
+      setCAPanel(caPanelData);
       setFeedbackItems(feedbackData);
       setAssistedIntents(assistedData);
       setPaymentOrders(paymentData);
@@ -211,7 +217,7 @@ export default function SuperAdminDashboard() {
 
   const handleCAUpdate = async (
     requestId: number,
-    payload: Partial<Pick<AdminCARequest, "status" | "priority" | "assigned_to_email" | "internal_notes">>
+    payload: Partial<Pick<AdminCARequest, "status" | "priority" | "assigned_ca" | "assigned_to_email" | "internal_notes">>
   ) => {
     const key = `ca-${requestId}`;
     setSavingKey(key);
@@ -324,7 +330,9 @@ export default function SuperAdminDashboard() {
     const parserReviewCount = parserJobs.filter(
       (job) => job.status === "review_required" || job.extraction?.review_status === "pending"
     ).length;
-    const newCaCount = caRequests.filter((item) => item.status === "new").length;
+    const readyToAssignCount = caRequests.filter(
+      (item) => item.consent_to_share_with_ca && ["new", "triaged"].includes(item.status)
+    ).length;
     const newFeedbackCount = feedbackItems.filter((item) => item.status === "new").length;
     const newIntentCount = assistedIntents.filter((item) => item.status === "new").length;
     const paymentAttentionCount =
@@ -354,8 +362,8 @@ export default function SuperAdminDashboard() {
       },
       {
         id: "ca-new",
-        label: "New CA requests",
-        count: newCaCount,
+        label: "CA cases ready to assign",
+        count: readyToAssignCount,
         tone: "border-cyan-200 bg-cyan-50 text-cyan-900",
         sectionId: "ca-requests",
       },
@@ -1048,7 +1056,9 @@ export default function SuperAdminDashboard() {
                     <option value="">All Statuses</option>
                     <option value="new">New</option>
                     <option value="triaged">Triaged</option>
+                    <option value="assigned">Assigned</option>
                     <option value="contacted">Contacted</option>
+                    <option value="engaged">Engaged</option>
                     <option value="resolved">Resolved</option>
                     <option value="closed">Closed</option>
                   </select>
@@ -1069,10 +1079,26 @@ export default function SuperAdminDashboard() {
                       <div>
                         <p className="font-semibold text-slate-900 break-words">{item.name} · {item.email}</p>
                         <p className="text-sm text-slate-500">Notice: {item.notice_code || "General"} · {item.phone_number || "No phone"}</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${item.consent_to_share_with_ca ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                            {item.consent_to_share_with_ca ? "Consent captured" : "Consent missing"}
+                          </span>
+                          {item.assigned_to_email && (
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                              Assigned to {item.assigned_to_email}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <p className="text-xs text-slate-500">{new Date(item.created_at).toLocaleString()}</p>
                     </div>
                     {item.message && <p className="text-sm text-slate-700 mb-3">{item.message}</p>}
+                    <div className="mb-3 grid grid-cols-1 gap-2 text-xs text-slate-500 md:grid-cols-2 xl:grid-cols-4">
+                      <p>Consent recorded: {item.consent_recorded_at ? new Date(item.consent_recorded_at).toLocaleString() : "Not recorded"}</p>
+                      <p>Assigned at: {item.assigned_at ? new Date(item.assigned_at).toLocaleString() : "Pending"}</p>
+                      <p>Case shared: {item.shared_case_materials_at ? new Date(item.shared_case_materials_at).toLocaleString() : "Pending"}</p>
+                      <p>Engaged at: {item.engaged_at ? new Date(item.engaged_at).toLocaleString() : "Pending"}</p>
+                    </div>
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-2">
                       <select
                         value={item.status}
@@ -1081,7 +1107,9 @@ export default function SuperAdminDashboard() {
                       >
                         <option value="new">New</option>
                         <option value="triaged">Triaged</option>
+                        <option value="assigned">Assigned</option>
                         <option value="contacted">Contacted</option>
+                        <option value="engaged">Engaged</option>
                         <option value="resolved">Resolved</option>
                         <option value="closed">Closed</option>
                       </select>
@@ -1094,16 +1122,22 @@ export default function SuperAdminDashboard() {
                         <option value="medium">Medium</option>
                         <option value="high">High</option>
                       </select>
-                      <input
-                        defaultValue={item.assigned_to_email || ""}
-                        onBlur={(e) => {
-                          if (e.target.value !== item.assigned_to_email) {
-                            void handleCAUpdate(item.id, { assigned_to_email: e.target.value.trim() });
-                          }
-                        }}
-                        placeholder="Assign owner email"
+                      <select
+                        value={item.assigned_ca || ""}
+                        onChange={(e) =>
+                          void handleCAUpdate(item.id, {
+                            assigned_ca: e.target.value ? Number(e.target.value) : null,
+                          })
+                        }
                         className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm"
-                      />
+                      >
+                        <option value="">Assign vetted CA</option>
+                        {caPanel.map((ca) => (
+                          <option key={ca.id} value={ca.id}>
+                            {ca.display_name} · {ca.city || ca.email}
+                          </option>
+                        ))}
+                      </select>
                       <input
                         defaultValue={item.internal_notes || ""}
                         onBlur={(e) => {

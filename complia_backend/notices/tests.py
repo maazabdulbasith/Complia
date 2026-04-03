@@ -14,7 +14,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from .models import NoticeFeedback, NoticeType, ParserBenchmarkRun, ParserExtraction, ParserJob, SavedNotice, TriggerKeyword
 from .parser_utils import parse_notice_document
-from accounts.models import User, UserEntitlement
+from accounts.models import CAHelpRequest, User, UserEntitlement
 
 class NoticeAPITests(APITestCase):
     def setUp(self):
@@ -168,6 +168,23 @@ class NoticeAPITests(APITestCase):
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
         self.assertEqual(list_response.data["count"], 1)
         self.assertEqual(list_response.data["results"][0]["notice"]["code"], self.notice.code)
+
+    def test_saved_notice_includes_latest_ca_request_summary(self):
+        self.client.force_authenticate(user=self.user)
+        CAHelpRequest.objects.create(
+            user=self.user,
+            notice_code=self.notice.code,
+            name="Tester",
+            email=self.user.email,
+            consent_to_share_with_ca=True,
+            consent_recorded_at=timezone.now(),
+            status="contacted",
+        )
+        self.client.post(reverse("saved-notice-list"), {"notice_id": self.notice.id}, format="json")
+
+        list_response = self.client.get(reverse("saved-notice-list"))
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["results"][0]["ca_request"]["status"], "contacted")
 
     def test_save_notice_delete(self):
         self.client.force_authenticate(user=self.user)

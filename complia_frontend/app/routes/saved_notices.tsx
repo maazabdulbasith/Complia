@@ -58,6 +58,17 @@ function formatDate(value: string): string {
   });
 }
 
+function caseStatusTone(status: "new" | "triaged" | "assigned" | "contacted" | "engaged" | "resolved" | "closed") {
+  if (status === "resolved" || status === "closed") return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  if (status === "engaged" || status === "contacted") return "bg-blue-50 text-blue-700 ring-blue-200";
+  if (status === "assigned" || status === "triaged") return "bg-amber-50 text-amber-700 ring-amber-200";
+  return "bg-slate-50 text-slate-700 ring-slate-200";
+}
+
+function caseStatusLabel(status: "new" | "triaged" | "assigned" | "contacted" | "engaged" | "resolved" | "closed") {
+  return status.replace("_", " ");
+}
+
 function SafeSkeleton() {
   return (
     <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.05)]">
@@ -217,6 +228,7 @@ export default function SavedNoticesPage() {
               const immediateNextMove = readString(snapshot, "immediate_next_move");
               const urgencyGuidance = readString(snapshot, "urgency_guidance");
               const riskBand = readString(snapshot, "risk_band");
+              const caRequest = item.ca_request;
 
               return (
                 <div
@@ -297,6 +309,43 @@ export default function SavedNoticesPage() {
                         <p className="mt-2 text-sm text-slate-600">No checklist available yet.</p>
                       )}
                     </div>
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-cyan-200 bg-cyan-50 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-700">CA request status</p>
+                        <p className="mt-1 text-sm text-slate-700">
+                          {caRequest
+                            ? "Track where your CA handoff currently stands."
+                            : "No CA request started yet for this notice."}
+                        </p>
+                      </div>
+                      {caRequest && (
+                        <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase ring-1 ${caseStatusTone(caRequest.status)}`}>
+                          {caseStatusLabel(caRequest.status)}
+                        </span>
+                      )}
+                    </div>
+                    {caRequest ? (
+                      <div className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
+                        <p>Priority: <span className="font-semibold">{caRequest.priority}</span></p>
+                        <p>Assigned CA: <span className="font-semibold">{caRequest.assigned_ca_name || caRequest.assigned_to_email || "Pending assignment"}</span></p>
+                        <p>Assigned at: <span className="font-semibold">{caRequest.assigned_at ? new Date(caRequest.assigned_at).toLocaleString() : "Pending"}</span></p>
+                        <p>First contact: <span className="font-semibold">{caRequest.contacted_at ? new Date(caRequest.contacted_at).toLocaleString() : "Pending"}</span></p>
+                        <p>Engaged at: <span className="font-semibold">{caRequest.engaged_at ? new Date(caRequest.engaged_at).toLocaleString() : "Pending"}</span></p>
+                        <p>Closed at: <span className="font-semibold">{caRequest.closed_at ? new Date(caRequest.closed_at).toLocaleString() : "Open"}</span></p>
+                      </div>
+                    ) : (
+                      <div className="mt-3">
+                        <Link
+                          to={`/ca-help?notice=${encodeURIComponent(item.notice.code)}`}
+                          className="inline-flex rounded-xl border border-cyan-200 bg-white px-4 py-2 text-sm font-semibold text-cyan-700 transition hover:bg-cyan-100"
+                        >
+                          Start CA request
+                        </Link>
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-4 grid gap-4 lg:grid-cols-2">

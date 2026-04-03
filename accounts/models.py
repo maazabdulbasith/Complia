@@ -66,11 +66,40 @@ class User(AbstractUser):
         return f"{self.email} ({self.get_user_type_display()})"
 
 
+class CAPanelProfile(models.Model):
+    user = models.OneToOneField(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ca_panel_profile",
+    )
+    display_name = models.CharField(max_length=120)
+    email = models.EmailField(unique=True)
+    phone_number = models.CharField(max_length=20, blank=True)
+    icai_membership_number = models.CharField(max_length=60, blank=True)
+    city = models.CharField(max_length=80, blank=True)
+    specialties = models.JSONField(default=list, blank=True)
+    turnaround_sla_hours = models.PositiveIntegerField(default=24)
+    is_active = models.BooleanField(default=True, db_index=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["display_name", "email"]
+
+    def __str__(self):
+        return f"{self.display_name} ({self.email})"
+
+
 class CAHelpRequest(models.Model):
     STATUS_CHOICES = (
         ("new", "New"),
         ("triaged", "Triaged"),
+        ("assigned", "Assigned"),
         ("contacted", "Contacted"),
+        ("engaged", "Engaged"),
         ("resolved", "Resolved"),
         ("closed", "Closed"),
     )
@@ -92,11 +121,23 @@ class CAHelpRequest(models.Model):
     email = models.EmailField()
     phone_number = models.CharField(max_length=20, blank=True)
     message = models.TextField(blank=True)
+    consent_to_share_with_ca = models.BooleanField(default=False)
+    consent_recorded_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="new")
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default="medium")
+    assigned_ca = models.ForeignKey(
+        "accounts.CAPanelProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_requests",
+    )
     assigned_to_email = models.EmailField(blank=True)
+    assigned_at = models.DateTimeField(null=True, blank=True)
+    shared_case_materials_at = models.DateTimeField(null=True, blank=True)
     internal_notes = models.TextField(blank=True)
     contacted_at = models.DateTimeField(null=True, blank=True)
+    engaged_at = models.DateTimeField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
