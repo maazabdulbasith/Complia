@@ -13,6 +13,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 from .models import NoticeFeedback, NoticeType, ParserBenchmarkRun, ParserExtraction, ParserJob, SavedNotice, TriggerKeyword
+from .parser_utils import parse_notice_document
 from accounts.models import User, UserEntitlement
 
 class NoticeAPITests(APITestCase):
@@ -450,6 +451,33 @@ class NoticeAPITests(APITestCase):
         response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertLessEqual(len(response.data["extraction"]["legal_section"] or ""), 120)
+
+    def test_parse_notice_document_ignores_noise_amount_and_reads_act_rules_section(self):
+        NoticeType.objects.create(
+            code="GST-ASMT-10",
+            title="Scrutiny of Returns",
+            summary="Scrutiny notice",
+            detailed_explanation="Explanation",
+            consequences_of_ignoring="Penalty",
+            next_steps="Reply",
+            severity="medium",
+            is_active=True,
+        )
+        noisy_text = (
+            "GST ASMT - 10 [See rule 99(1)]\n"
+            "Act/ Rules Provisions:\n"
+            "The proper officer may scrutinize the return.\n"
+            "Section under which notice is issued 61\n"
+            "Date by which reply has to be submitted 23/12/2024\n"
+            "RIFFB WEBPVP8 random payload 8.00 5F% unrelated OCR noise\n"
+        )
+
+        parsed = parse_notice_document(noisy_text, "ASMT10.txt")
+
+        self.assertEqual(parsed["notice"].code, "GST-ASMT-10")
+        self.assertEqual(parsed["legal_section"], "Section 61")
+        self.assertIsNone(parsed["amount_claimed"])
+        self.assertEqual(parsed["deadline_date"].isoformat(), "2024-12-23")
 
     @override_settings(PARSER_PRIVATE_BETA_ENABLED=True, PARSER_BETA_EMAILS={"beta5@complia.in"})
     def test_parser_upload_sanitizes_nul_bytes_for_text_payload(self):

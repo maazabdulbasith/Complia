@@ -183,6 +183,26 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 Talk to a CA
               </Link>
             </div>
+            <div className="mt-5 grid max-w-3xl gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Search</p>
+                <p className="mt-1 text-sm leading-6 text-slate-700">
+                  Best when you already know the notice code and want the plain-English breakdown.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-cyan-200/80 bg-cyan-50/80 px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-700">Upload</p>
+                <p className="mt-1 text-sm leading-6 text-slate-700">
+                  Best when you only have the actual notice file and want a case-ready response pack.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Safe</p>
+                <p className="mt-1 text-sm leading-6 text-slate-700">
+                  Save the notice, parser result, and CA handoff brief so nothing gets lost later.
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="rounded-3xl border border-slate-200/80 bg-white/80 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-6">

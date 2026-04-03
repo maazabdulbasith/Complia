@@ -186,6 +186,65 @@ function payloadString(payload: Record<string, unknown> | undefined, key: string
   return typeof value === "string" ? value : "";
 }
 
+function buildDecisionSummary({
+  noticeCode,
+  noticeTitle,
+  severity,
+  urgencyText,
+  deadlineLabel,
+  legalSection,
+  amountClaimed,
+}: {
+  noticeCode: string;
+  noticeTitle: string;
+  severity: "low" | "medium" | "high";
+  urgencyText: string;
+  deadlineLabel: string;
+  legalSection: string;
+  amountClaimed: string;
+}): {
+  headline: string;
+  explanation: string;
+  nextMove: string;
+} {
+  const detectedLabel = noticeTitle || noticeCode || "this notice";
+  const severityLead =
+    severity === "high"
+      ? "This is likely a high-risk notice from your actual uploaded document."
+      : severity === "medium"
+        ? "This looks like a notice that needs a formal response, not a casual follow-up."
+        : "This appears to be a lower-risk notice, but it still needs a tracked response.";
+
+  const extractedSignals = [
+    noticeCode ? `we matched it to ${noticeCode}` : "",
+    legalSection && legalSection !== "Not detected" ? `the legal trigger appears to be ${legalSection}` : "",
+    deadlineLabel !== "Not detected" ? `your reply deadline reads as ${deadlineLabel}` : "",
+    amountClaimed && amountClaimed !== "Not detected" ? `the notice references ${amountClaimed}` : "",
+  ].filter(Boolean);
+
+  const explanation = extractedSignals.length
+    ? `${severityLead} From the uploaded file, ${extractedSignals.join(", ")}.`
+    : `${severityLead} Complia extracted a usable draft, but some fields still need manual confirmation from the uploaded notice.`;
+
+  const nextMove =
+    severity === "high"
+      ? `Treat this as urgent: ${urgencyText.toLowerCase()}. Pull together the reply documents and get CA review started immediately.`
+      : severity === "medium"
+        ? `Use this as your working response brief for ${detectedLabel}. Confirm the deadline, validate the discrepancy, and get your reply drafted this week.`
+        : `Use this result as your checklist for ${detectedLabel}. Confirm the filing facts, save the case to Safe, and respond before the matter escalates.`;
+
+  return {
+    headline:
+      severity === "high"
+        ? "Urgent response required"
+        : severity === "medium"
+          ? "Structured response recommended"
+          : "Track and resolve this notice",
+    explanation,
+    nextMove,
+  };
+}
+
 function buildPersonalizedActionChecklist({
   noticeTitle,
   severity,
@@ -320,6 +379,15 @@ export default function ParserUploadPage() {
     Boolean(noticeCode.trim()) &&
     Boolean(parserJob?.notice_code) &&
     noticeCode.trim().toUpperCase() !== (parserJob?.notice_code || "").toUpperCase();
+  const decisionSummary = buildDecisionSummary({
+    noticeCode: parserJob?.notice_code || noticeCode.trim().toUpperCase(),
+    noticeTitle: detectedNotice?.title || "",
+    severity: severityForGuidance,
+    urgencyText,
+    deadlineLabel: replyDeadlineLabel,
+    legalSection: parserJob?.extraction?.legal_section || "Not detected",
+    amountClaimed: parserJob?.extraction?.amount_claimed || "Not detected",
+  });
   const actionChecklist = useMemo(() => {
     return buildPersonalizedActionChecklist({
       noticeTitle: detectedNotice?.title || parserJob?.notice_code || "detected notice",
@@ -954,6 +1022,54 @@ export default function ParserUploadPage() {
                     {parserJob.status.replace("_", " ")}
                   </span>
                 </div>
+                <div className="rounded-[28px] border border-slate-900/10 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-900 p-5 text-white shadow-[0_20px_80px_rgba(15,23,42,0.24)] sm:p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-200/90">
+                        What Complia found in your uploaded notice
+                      </p>
+                      <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+                        {decisionSummary.headline}
+                      </h2>
+                    </div>
+                    <span
+                      className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                        riskBand === "critical"
+                          ? "bg-rose-400/15 text-rose-100 ring-1 ring-rose-200/20"
+                          : riskBand === "high"
+                            ? "bg-amber-300/15 text-amber-100 ring-1 ring-amber-200/20"
+                            : riskBand === "medium"
+                              ? "bg-sky-300/15 text-sky-100 ring-1 ring-sky-200/20"
+                              : "bg-emerald-300/15 text-emerald-100 ring-1 ring-emerald-200/20"
+                      }`}
+                    >
+                      {riskBand} priority
+                    </span>
+                  </div>
+                  <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-100/90 sm:text-[15px]">
+                    {decisionSummary.explanation}
+                  </p>
+                  <div className="mt-4 grid gap-3 lg:grid-cols-[1.25fr_0.75fr]">
+                    <div className="rounded-2xl border border-white/10 bg-white/6 p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100/80">
+                        Immediate next move
+                      </p>
+                      <p className="mt-2 text-sm leading-7 text-white/90">
+                        {decisionSummary.nextMove}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/6 p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100/80">
+                        Why this paid parse is different
+                      </p>
+                      <ul className="mt-2 space-y-2 text-sm text-white/85">
+                        <li>Matched against your actual uploaded document, not just a generic search.</li>
+                        <li>Pulls out the response deadline, legal section, and urgency in one view.</li>
+                        <li>Creates a CA-ready brief and saves the case to Safe for follow-up.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl border border-slate-200 bg-white p-3">
                     <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Notice detected</p>
@@ -1011,18 +1127,8 @@ export default function ParserUploadPage() {
                     <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                       Personalized response pack
                     </p>
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                        riskBand === "critical"
-                          ? "bg-rose-100 text-rose-700"
-                          : riskBand === "high"
-                            ? "bg-amber-100 text-amber-700"
-                            : riskBand === "medium"
-                              ? "bg-sky-100 text-sky-700"
-                              : "bg-emerald-100 text-emerald-700"
-                      }`}
-                    >
-                      {riskBand} priority
+                    <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+                      Action plan
                     </span>
                   </div>
 
@@ -1110,6 +1216,9 @@ export default function ParserUploadPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.13em] text-blue-700">
                     Understand this notice
                   </p>
+                  <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
+                    This section explains the detected notice in plain English. The cards above are specific to your uploaded document; the explanation below is the knowledge-base guidance for this notice type.
+                  </p>
 
                   {isLoadingNoticeExplain && (
                     <p className="mt-2 text-sm text-slate-600">Loading plain-English explanation...</p>
@@ -1139,36 +1248,36 @@ export default function ParserUploadPage() {
                       </div>
 
                       <div>
-                        <p className="text-lg font-bold text-slate-900">{detectedNotice.title}</p>
-                        <p className="mt-1 text-base leading-7 text-slate-700">{detectedNotice.summary}</p>
+                        <p className="text-2xl font-bold tracking-tight text-slate-950">{detectedNotice.title}</p>
+                        <p className="mt-2 text-[17px] leading-8 text-slate-700">{detectedNotice.summary}</p>
                       </div>
 
                       {detectedNotice.why_received && (
-                        <div>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-blue-700">
                             Why you likely got this
                           </p>
-                          <p className="mt-1 text-[15px] leading-7 text-slate-700">{detectedNotice.why_received}</p>
+                          <p className="mt-2 text-[15px] leading-7 text-slate-700">{detectedNotice.why_received}</p>
                         </div>
                       )}
 
                       {detectedNotice.consequences_of_ignoring && (
-                        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-rose-700">
                             If you ignore this
                           </p>
-                          <p className="mt-1 text-[15px] leading-7 text-rose-900">
+                          <p className="mt-2 text-[15px] leading-7 text-rose-900">
                             {detectedNotice.consequences_of_ignoring}
                           </p>
                         </div>
                       )}
 
                       {detectedNotice.next_steps && (
-                        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-blue-700">
                             What to do next
                           </p>
-                          <p className="mt-1 whitespace-pre-line text-[15px] leading-7 text-blue-900">
+                          <p className="mt-2 whitespace-pre-line text-[15px] leading-7 text-blue-900">
                             {detectedNotice.next_steps}
                           </p>
                         </div>
