@@ -16,7 +16,7 @@ from accounts.models import AnalyticsEvent, UserEntitlement
 from accounts.permissions import IsParserBetaUser, IsSuperAdmin
 from .models import NoticeFeedback, NoticeType, ParserBenchmarkRun, ParserExtraction, ParserJob, SavedNotice
 from .ocr_utils import OCRProcessingError, extract_text_from_binary_document, sanitize_ocr_text
-from .parser_utils import parse_notice_document
+from .parser_utils import NonNoticeDocumentError, analyze_notice_likelihood, parse_notice_document
 from .serializers import (
     AdminFeedbackSerializer,
     AdminNoticeTypeSerializer,
@@ -303,6 +303,11 @@ class ParserUploadView(APIView):
                 raise ValueError(
                     "Could not extract readable text from this file. Please upload a clearer scan or .txt file."
                 )
+            notice_likelihood = analyze_notice_likelihood(raw_text, upload.name)
+            if not notice_likelihood["is_likely_notice"]:
+                raise NonNoticeDocumentError(
+                    "This file does not appear to be a tax or compliance notice. Please upload the actual notice PDF/image/text."
+                )
             notice_code = serializer.validated_data.get("notice_code", "").strip()
             parsed = parse_notice_document(raw_text, upload.name, notice_code)
             deadline_date = parsed["deadline_date"]
@@ -335,6 +340,9 @@ class ParserUploadView(APIView):
                 "ocr_pages_processed": ocr_metadata["ocr_pages_processed"],
                 "ocr_used": ocr_metadata["ocr_used"],
                 "ocr_text_chars": ocr_metadata["ocr_text_chars"],
+                "notice_likelihood_score": notice_likelihood["score"],
+                "notice_likelihood_positive_signals": notice_likelihood["positives"],
+                "notice_likelihood_negative_signals": notice_likelihood["negatives"],
             }
 
             ParserExtraction.objects.create(
@@ -360,7 +368,7 @@ class ParserUploadView(APIView):
 
             return Response(ParserJobSerializer(parser_job).data, status=status.HTTP_201_CREATED)
         except Exception as exc:
-            if credit_reserved:
+            if credit_reserved and not isinstance(exc, NonNoticeDocumentError):
                 with transaction.atomic():
                     entitlement, _ = UserEntitlement.objects.select_for_update().get_or_create(
                         user=request.user,
@@ -380,6 +388,14 @@ class ParserUploadView(APIView):
                             "updated_at",
                         ]
                     )
+            if isinstance(exc, NonNoticeDocumentError):
+                return Response(
+                    {
+                        "detail": str(exc),
+                        "code": "NOT_A_NOTICE",
+                    },
+                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
             if isinstance(exc, (ValueError, OCRProcessingError)):
                 return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
             raise

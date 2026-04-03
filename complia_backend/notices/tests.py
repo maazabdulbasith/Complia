@@ -452,6 +452,35 @@ class NoticeAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertLessEqual(len(response.data["extraction"]["legal_section"] or ""), 120)
 
+    @override_settings(PARSER_PRIVATE_BETA_ENABLED=True, PARSER_BETA_EMAILS={"betaresume@complia.in"})
+    def test_parser_upload_rejects_non_notice_and_keeps_credit_consumed(self):
+        beta_user = User.objects.create_user(email="betaresume@complia.in", password="pass123456", user_type="taxpayer")
+        UserEntitlement.objects.create(
+            user=beta_user,
+            parser_credits=1,
+            lifetime_purchased_credits=1,
+            lifetime_consumed_credits=0,
+        )
+        self.client.force_authenticate(user=beta_user)
+        resume_text = (
+            "Resume\n"
+            "Objective: Software engineer role\n"
+            "Work Experience: Built React and Python systems\n"
+            "Education: Bachelor of Technology\n"
+            "Skills: JavaScript, TypeScript, Python, SQL, React\n"
+            "LinkedIn: linkedin.com/in/example\n"
+        )
+        upload = SimpleUploadedFile("resume.txt", resume_text.encode("utf-8"), content_type="text/plain")
+
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(response.data["code"], "NOT_A_NOTICE")
+        entitlement = UserEntitlement.objects.get(user=beta_user)
+        self.assertEqual(entitlement.parser_credits, 0)
+        self.assertEqual(entitlement.lifetime_consumed_credits, 1)
+        self.assertEqual(ParserJob.objects.count(), 0)
+
     def test_parse_notice_document_ignores_noise_amount_and_reads_act_rules_section(self):
         NoticeType.objects.create(
             code="GST-ASMT-10",

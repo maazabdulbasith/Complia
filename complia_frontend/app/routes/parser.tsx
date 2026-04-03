@@ -357,6 +357,9 @@ export default function ParserUploadPage() {
         }
         return "Your account does not have parser access yet. Contact support for beta enablement.";
       }
+      if (error.status === 422 || error.code === "NOT_A_NOTICE") {
+        return "This file does not look like a tax notice or compliance notice. Please upload the actual notice PDF/image/text.";
+      }
       if (error.status === 413) {
         return "File is too large. Upload a smaller file and retry.";
       }

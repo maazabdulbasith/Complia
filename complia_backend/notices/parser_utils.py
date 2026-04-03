@@ -5,12 +5,54 @@ from decimal import Decimal, InvalidOperation
 from .models import NoticeType
 
 
+class NonNoticeDocumentError(ValueError):
+    pass
+
+
 def _normalize_text(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", value.lower())
 
 
 def _non_empty_lines(text: str):
     return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def analyze_notice_likelihood(text: str, filename: str = "") -> dict:
+    haystack = f"{filename}\n{text}".lower()
+    positive_patterns = {
+        "notice": r"\bnotice\b",
+        "gst": r"\bgst\b|\bgstr[-\s]?\d[a-z]?\b|\bgstin\b",
+        "income_tax": r"income\s*tax|\bitr\b|\bpan\b|\bais\b|\b26as\b|\be-?proceedings\b",
+        "legal_reference": r"\bsection\b|\bu/s\b|\bsec\.?\b|\brule\b",
+        "response_language": r"reply|respond|show cause|intimation|scrutiny|demand|assessment|hearing",
+        "official_markers": r"reference\s*no|din|document\s*identification\s*number|order\s*no|tax\s*period",
+        "department_markers": r"commissioner|assessing\s*officer|deputy\s*commissioner|central\s*board|department",
+    }
+    negative_patterns = {
+        "resume": r"resume|curriculum\s+vitae|objective|work\s+experience|employment\s+history|linkedin",
+        "education": r"education|university|college|bachelor|master|cgpa|gpa",
+        "skills": r"\bskills\b|python|javascript|react|node\.?js|sql|c\+\+|java|typescript",
+        "portfolio": r"portfolio|github|projects|achievements|hobbies|interests|references",
+    }
+
+    positives = [label for label, pattern in positive_patterns.items() if re.search(pattern, haystack)]
+    negatives = [label for label, pattern in negative_patterns.items() if re.search(pattern, haystack)]
+
+    score = (len(positives) * 2) - (len(negatives) * 3)
+    line_count = len(_non_empty_lines(text))
+    if line_count >= 8:
+        score += 1
+    if re.search(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}", haystack):
+        score += 1
+
+    is_likely_notice = len(positives) >= 2 and score >= 3 and "resume" not in negatives
+
+    return {
+        "is_likely_notice": is_likely_notice,
+        "score": score,
+        "positives": positives,
+        "negatives": negatives,
+    }
 
 
 def extract_amount(text: str):
