@@ -49,6 +49,29 @@ export type CAHelpRequestPayload = {
   consent_to_share_with_ca: boolean;
 };
 
+export type MyCAHelpRequest = {
+  id: number;
+  notice_code: string;
+  name: string;
+  email: string;
+  phone_number: string;
+  message: string;
+  consent_to_share_with_ca: boolean;
+  consent_recorded_at: string | null;
+  status: "new" | "triaged" | "assigned" | "contacted" | "engaged" | "resolved" | "closed";
+  priority: "low" | "medium" | "high";
+  assigned_ca: number | null;
+  assigned_ca_name: string;
+  assigned_to_email: string;
+  assigned_at: string | null;
+  shared_case_materials_at: string | null;
+  contacted_at: string | null;
+  engaged_at: string | null;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AssistedIntentPayload = {
   notice_id?: number;
   offer_key?: string;
@@ -804,6 +827,22 @@ export async function getAdminCARequests(status?: string): Promise<AdminCAReques
     return data;
   }
   throw new Error("Unexpected admin CA requests response format");
+}
+
+export async function getMyCAHelpRequests(noticeCode?: string): Promise<MyCAHelpRequest[]> {
+  const query = noticeCode ? `?notice_code=${encodeURIComponent(noticeCode)}` : "";
+  const response = await fetchWithAuth(`${API_BASE}/ca-help/my/${query}`);
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Failed to fetch CA help requests"));
+  }
+  const data = await response.json();
+  if (isPaginatedResponse<MyCAHelpRequest>(data)) {
+    return data.results;
+  }
+  if (Array.isArray(data)) {
+    return data;
+  }
+  throw new Error("Unexpected CA help requests response format");
 }
 
 export async function getAdminCAPanel(): Promise<CAPanelProfile[]> {

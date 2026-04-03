@@ -82,10 +82,12 @@ export default function LoginPage() {
 
       <main className="relative z-10 mx-auto flex w-full max-w-5xl flex-col gap-6 sm:gap-8 md:flex-row md:items-center">
         <section className="md:w-1/2">
-          <BrandMark to="/" imageClassName="h-9 sm:h-10 w-auto" />
-          <Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-700">
-            <span aria-hidden>&larr;</span> Back to search
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <BrandMark to="/" imageClassName="h-9 sm:h-10 w-auto" />
+            <Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-700">
+              <span aria-hidden>&larr;</span> Back to search
+            </Link>
+          </div>
           <p className="mt-8 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-blue-700">
             Secure access
           </p>

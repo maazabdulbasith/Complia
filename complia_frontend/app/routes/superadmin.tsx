@@ -382,7 +382,7 @@ export default function SuperAdminDashboard() {
       { id: "overview", label: "Overview" },
       { id: "payments", label: "Payments", count: paymentOrders.length },
       { id: "assisted-intents", label: "Assisted Intents", count: assistedIntents.length },
-      { id: "notice-qa", label: "Notice QA", count: noticeQaItems.length },
+      { id: "notice-qa", label: "Notice Content QA", count: noticeQaItems.length },
       { id: "parser-queue", label: "Parser Queue", count: parserJobs.length },
       { id: "ca-requests", label: "CA Requests", count: caRequests.length },
       { id: "feedback", label: "Feedback", count: feedbackItems.length },
@@ -824,7 +824,7 @@ export default function SuperAdminDashboard() {
             <section id="notice-qa" className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm mb-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
                 <h2 className="text-xl font-bold text-slate-900">
-                  Notice Editorial QA
+                  Notice Content QA
                   <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">
                     {noticeQaItems.length}
                   </span>
@@ -910,7 +910,7 @@ export default function SuperAdminDashboard() {
                 ))}
                 {noticeQaItems.length === 0 && (
                   <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
-                    No notice records match this QA filter.
+                    No notice content records match this QA filter.
                   </p>
                 )}
               </div>
@@ -1149,6 +1149,11 @@ export default function SuperAdminDashboard() {
                         className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm"
                       />
                     </div>
+                    {caPanel.length === 0 && (
+                      <p className="mt-2 text-xs text-amber-700">
+                        No vetted CA panel entries are available yet, so assignment options are empty right now.
+                      </p>
+                    )}
                     {savingKey === `ca-${item.id}` && <p className="text-xs text-slate-500 mt-2">Saving...</p>}
                   </div>
                 ))}

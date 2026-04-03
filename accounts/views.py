@@ -340,6 +340,22 @@ class AdminCAPanelListView(generics.ListAPIView):
     throttle_scope = "admin_ops"
 
     def get_queryset(self):
+        eligible_users = User.objects.filter(user_type="ca", is_verified_ca=True).exclude(email="")
+        existing_user_ids = set(
+            CAPanelProfile.objects.exclude(user__isnull=True).values_list("user_id", flat=True)
+        )
+        missing_profiles = [user for user in eligible_users if user.id not in existing_user_ids]
+        for user in missing_profiles:
+            display_name = f"{user.first_name} {user.last_name}".strip() or user.email.split("@")[0]
+            CAPanelProfile.objects.get_or_create(
+                user=user,
+                defaults={
+                    "display_name": display_name,
+                    "email": user.email,
+                    "phone_number": user.phone_number or "",
+                    "is_active": True,
+                },
+            )
         return CAPanelProfile.objects.filter(is_active=True).order_by("display_name", "email")
 
 

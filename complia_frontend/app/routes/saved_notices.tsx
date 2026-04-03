@@ -1,8 +1,8 @@
 ﻿import { Link } from "react-router";
 import { useCallback, useEffect, useState } from "react";
 
-import { getSavedNotices, updateSafeEntry } from "../api/client";
-import type { SavedNotice } from "../api/client";
+import { getMyCAHelpRequests, getSavedNotices, updateSafeEntry } from "../api/client";
+import type { MyCAHelpRequest, SavedNotice } from "../api/client";
 import BrandMark from "../lib/brand_mark";
 import { trackEvent } from "../lib/analytics";
 
@@ -85,20 +85,26 @@ function SafeSkeleton() {
 
 export default function SavedNoticesPage() {
   const [items, setItems] = useState<SavedNotice[]>([]);
+  const [caRequests, setCARequests] = useState<MyCAHelpRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [authRequired, setAuthRequired] = useState(false);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [copyMessageId, setCopyMessageId] = useState<number | null>(null);
 
+  const unlinkedCARequests = caRequests.filter(
+    (request) => !request.notice_code || !items.some((item) => item.notice.code === request.notice_code)
+  );
+
   const loadSafeItems = useCallback(async () => {
     setLoading(true);
     setError(null);
     setAuthRequired(false);
     try {
-      const data = await getSavedNotices();
+      const [data, requests] = await Promise.all([getSavedNotices(), getMyCAHelpRequests()]);
       setItems(data);
-      trackEvent("saved_notices_viewed", { item_count: data.length, workspace: "safe" });
+      setCARequests(requests);
+      trackEvent("saved_notices_viewed", { item_count: data.length, ca_request_count: requests.length, workspace: "safe" });
     } catch (apiError) {
       const message = apiError instanceof Error ? apiError.message : "Please sign in to view Safe.";
       setError(message);
@@ -199,7 +205,7 @@ export default function SavedNoticesPage() {
               </Link>
             </div>
           </div>
-        ) : items.length === 0 ? (
+        ) : items.length === 0 && caRequests.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
             <p className="text-base font-semibold text-slate-900">Safe is empty.</p>
             <p className="mt-2 text-sm text-slate-600">
@@ -212,7 +218,7 @@ export default function SavedNoticesPage() {
               Start now
             </Link>
           </div>
-        ) : (
+        ) : items.length > 0 ? (
           <div className="space-y-4">
             {items.map((item) => {
               const status = item.action_status || "not_started";
@@ -435,6 +441,54 @@ export default function SavedNoticesPage() {
               );
             })}
           </div>
+        ) : (
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+            <p className="text-base font-semibold text-slate-900">No saved notices yet.</p>
+            <p className="mt-2 text-sm text-slate-600">
+              Your CA request tracking is still available below, even if you started from the homepage or without saving a notice first.
+            </p>
+          </div>
+        )}
+
+        {!loading && unlinkedCARequests.length > 0 && (
+          <section className="mt-6 rounded-2xl border border-cyan-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.05)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-700">CA request tracker</p>
+                <h2 className="font-display mt-1 text-2xl font-bold tracking-tight text-slate-900">Advisor follow-up status</h2>
+                <p className="mt-1 text-sm text-slate-600">This includes homepage or general CA requests even when they were not started from a saved notice.</p>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {unlinkedCARequests.map((request) => (
+                <div key={request.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-slate-900">
+                        {request.notice_code ? request.notice_code : "General CA request"}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Created on {new Date(request.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase ring-1 ${caseStatusTone(request.status)}`}>
+                      {caseStatusLabel(request.status)}
+                    </span>
+                  </div>
+                  {request.message && <p className="mt-3 text-sm leading-6 text-slate-700">{request.message}</p>}
+                  <div className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2 xl:grid-cols-3">
+                    <p>Priority: <span className="font-semibold">{request.priority}</span></p>
+                    <p>Assigned CA: <span className="font-semibold">{request.assigned_ca_name || request.assigned_to_email || "Pending assignment"}</span></p>
+                    <p>Assigned at: <span className="font-semibold">{request.assigned_at ? new Date(request.assigned_at).toLocaleString() : "Pending"}</span></p>
+                    <p>First contact: <span className="font-semibold">{request.contacted_at ? new Date(request.contacted_at).toLocaleString() : "Pending"}</span></p>
+                    <p>Engaged at: <span className="font-semibold">{request.engaged_at ? new Date(request.engaged_at).toLocaleString() : "Pending"}</span></p>
+                    <p>Closed at: <span className="font-semibold">{request.closed_at ? new Date(request.closed_at).toLocaleString() : "Open"}</span></p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
       </main>
     </div>

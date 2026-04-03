@@ -248,14 +248,6 @@ class SuperAdminCARequestOpsTests(APITestCase):
         self.assertIsNotNone(self.request_item.assigned_at)
         self.assertIsNotNone(self.request_item.shared_case_materials_at)
 
-    def test_admin_can_list_ca_panel(self):
-        self.client.force_authenticate(user=self.admin)
-        response = self.client.get("/api/v1/admin/ca-panel/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        results = response.data["results"] if isinstance(response.data, dict) and "results" in response.data else response.data
-        self.assertGreaterEqual(len(results), 1)
-        self.assertTrue(any(item["display_name"] == "Aarav Shah" for item in results))
-
         engaged_response = self.client.patch(
             f"/api/v1/admin/ca-requests/{self.request_item.id}/",
             {"status": "engaged"},
@@ -274,6 +266,21 @@ class SuperAdminCARequestOpsTests(APITestCase):
         self.assertEqual(contacted_response.status_code, status.HTTP_200_OK)
         self.request_item.refresh_from_db()
         self.assertIsNotNone(self.request_item.contacted_at)
+
+    def test_admin_can_list_ca_panel(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get("/api/v1/admin/ca-panel/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data["results"] if isinstance(response.data, dict) and "results" in response.data else response.data
+        self.assertGreaterEqual(len(results), 1)
+        self.assertTrue(any(item["display_name"] == "Aarav Shah" for item in results))
+
+    def test_user_can_view_own_ca_requests(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get("/api/v1/ca-help/my/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["notice_code"], "GST-DRC-01")
 
     def test_admin_can_export_ca_requests_csv(self):
         self.client.force_authenticate(user=self.admin)

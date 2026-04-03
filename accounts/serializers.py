@@ -40,6 +40,9 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
 
 class CAHelpRequestSerializer(serializers.ModelSerializer):
+    assigned_ca = serializers.IntegerField(source="assigned_ca.id", read_only=True)
+    assigned_ca_name = serializers.CharField(source="assigned_ca.display_name", read_only=True)
+
     class Meta:
         model = CAHelpRequest
         fields = [
@@ -53,6 +56,8 @@ class CAHelpRequestSerializer(serializers.ModelSerializer):
             "consent_recorded_at",
             "status",
             "priority",
+            "assigned_ca",
+            "assigned_ca_name",
             "assigned_to_email",
             "assigned_at",
             "shared_case_materials_at",
