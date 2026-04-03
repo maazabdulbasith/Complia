@@ -17,6 +17,7 @@ def extract_amount(text: str):
     contextual_patterns = [
         r"(?i)(?:amount|tax|demand|penalty|interest|liability|short[\s-]?paid|payable)[^\n]{0,60}?(?:rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)",
         r"(?i)(?:amount|tax|demand|penalty|interest|liability|short[\s-]?paid|payable)[^\n]{0,40}?([\d,]+(?:\.\d{1,2})?)",
+        r"(?i)(?:demand\s+of|liability\s+of|tax\s+payable\s+of)[^\n]{0,30}?([\d,]+(?:\.\d{1,2})?)",
     ]
     fallback_pattern = r"(?i)(?:rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)"
 
@@ -62,6 +63,7 @@ def extract_legal_section(text: str) -> str:
         r"(?i)section\s+under\s+which\s+notice\s+is\s+issued\s*[:\-]?\s*([0-9A-Za-z()\-/.]+)",
         r"(?i)act\s*/?\s*rules?\s+provisions?\s*[:\-]?\s*([0-9A-Za-z()\-/.]+)",
         r"(?i)\bu/s\.?\s*([0-9A-Za-z()\-/.]+)",
+        r"(?i)\bsec(?:tion)?\.?\s*([0-9]{1,3}[A-Za-z]?(?:\([0-9A-Za-z]+\))?)",
         r"(?i)\bsection\s+([0-9]{1,3}[A-Za-z]?(?:\([0-9A-Za-z]+\))?)",
     ]
     for pattern in patterns:
@@ -137,6 +139,7 @@ def detect_notice_type(text: str, filename: str):
 def extract_deadline_date(text: str):
     patterns = [
         r"(?i)(?:date\s+by\s+which\s+reply(?:\s+has\s+to\s+be)?\s+submitted|reply\s+by|last\s+date|due\s+date)[^\d]{0,30}(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+        r"(?i)(?:respond\s+before|reply\s+before|submit\s+before)[^\d]{0,20}(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
         r"(?i)(?:hearing\s+date|date\s+of\s+hearing)[^\d]{0,30}(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
     ]
     for pattern in patterns:

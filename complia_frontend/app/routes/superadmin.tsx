@@ -67,6 +67,14 @@ type AdminSectionNavItem = {
   count?: number;
 };
 
+type ActionQueueItem = {
+  id: string;
+  label: string;
+  count: number;
+  tone: string;
+  sectionId: string;
+};
+
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
@@ -312,6 +320,55 @@ export default function SuperAdminDashboard() {
     );
   }, [paymentOrders]);
 
+  const actionQueueItems = useMemo<ActionQueueItem[]>(() => {
+    const parserReviewCount = parserJobs.filter(
+      (job) => job.status === "review_required" || job.extraction?.review_status === "pending"
+    ).length;
+    const newCaCount = caRequests.filter((item) => item.status === "new").length;
+    const newFeedbackCount = feedbackItems.filter((item) => item.status === "new").length;
+    const newIntentCount = assistedIntents.filter((item) => item.status === "new").length;
+    const paymentAttentionCount =
+      paymentStatusCounts.initiated + paymentStatusCounts.abandoned + paymentStatusCounts.failed;
+
+    return [
+      {
+        id: "payments-open",
+        label: "Payments needing attention",
+        count: paymentAttentionCount,
+        tone: "border-sky-200 bg-sky-50 text-sky-900",
+        sectionId: "payments",
+      },
+      {
+        id: "parser-review",
+        label: "Parser reviews pending",
+        count: parserReviewCount,
+        tone: "border-amber-200 bg-amber-50 text-amber-900",
+        sectionId: "parser-queue",
+      },
+      {
+        id: "assisted-new",
+        label: "New assisted intents",
+        count: newIntentCount,
+        tone: "border-indigo-200 bg-indigo-50 text-indigo-900",
+        sectionId: "assisted-intents",
+      },
+      {
+        id: "ca-new",
+        label: "New CA requests",
+        count: newCaCount,
+        tone: "border-cyan-200 bg-cyan-50 text-cyan-900",
+        sectionId: "ca-requests",
+      },
+      {
+        id: "feedback-new",
+        label: "New feedback items",
+        count: newFeedbackCount,
+        tone: "border-rose-200 bg-rose-50 text-rose-900",
+        sectionId: "feedback",
+      },
+    ];
+  }, [assistedIntents, caRequests, feedbackItems, parserJobs, paymentStatusCounts]);
+
   const sectionNavItems = useMemo<AdminSectionNavItem[]>(
     () => [
       { id: "overview", label: "Overview" },
@@ -500,6 +557,34 @@ export default function SuperAdminDashboard() {
               <StatCard label="Visitors Today" value={metrics.visitors_today} accent="text-cyan-600" />
               <StatCard label="Total Searches" value={metrics.total_searches} accent="text-violet-600" />
               <StatCard label="CA Help Requests" value={metrics.ca_help_submissions} accent="text-rose-600" />
+            </section>
+
+            <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Action Queue</h2>
+                  <p className="text-sm text-slate-600">Jump straight to the parts of ops that need attention now.</p>
+                </div>
+                <p className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                  Live triage
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                {actionQueueItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleSectionJump(item.sectionId)}
+                    className={`rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${item.tone}`}
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] opacity-75">
+                      {item.label}
+                    </p>
+                    <p className="mt-2 text-3xl font-black tracking-tight">{item.count}</p>
+                    <p className="mt-2 text-xs font-semibold opacity-80">Open section</p>
+                  </button>
+                ))}
+              </div>
             </section>
 
             <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">

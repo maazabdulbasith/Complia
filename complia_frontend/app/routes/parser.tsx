@@ -283,6 +283,20 @@ function buildPersonalizedActionChecklist({
   return checklist;
 }
 
+function buildParserSnapshot(job: ParserJob, caBriefText: string, checklist: string[]) {
+  return {
+    parser_job_id: job.id,
+    notice_code: job.notice_code || "",
+    status: job.status,
+    confidence: job.confidence,
+    deadline_date: job.extraction?.deadline_date || "",
+    legal_section: job.extraction?.legal_section || "",
+    amount_claimed: job.extraction?.amount_claimed || "",
+    ca_brief: caBriefText,
+    next_steps_checklist: checklist,
+  };
+}
+
 export function meta({}: Route.MetaArgs) {
   return [
     { title: "Complia | Upload Notice & Understand" },
@@ -322,6 +336,7 @@ export default function ParserUploadPage() {
   const [saveNoticeMessage, setSaveNoticeMessage] = useState<string | null>(null);
   const [saveNoticeError, setSaveNoticeError] = useState<string | null>(null);
   const [copyBriefMessage, setCopyBriefMessage] = useState<string | null>(null);
+  const [lastSafeSyncKey, setLastSafeSyncKey] = useState("");
 
   const toUserMessage = (error: unknown, fallback: string): string => {
     if (error instanceof ApiClientError) {
@@ -569,12 +584,16 @@ export default function ParserUploadPage() {
       actionStatus?: "not_started" | "in_progress" | "done";
       caBrief?: string;
       nextStepsChecklist?: string[];
+      silent?: boolean;
     }
   ): Promise<boolean> => {
     const source = options?.source || "manual";
-    setIsSavingNotice(true);
-    setSaveNoticeError(null);
-    setSaveNoticeMessage(null);
+    const silent = Boolean(options?.silent);
+    if (!silent) {
+      setIsSavingNotice(true);
+      setSaveNoticeError(null);
+      setSaveNoticeMessage(null);
+    }
     try {
       await saveNotice(noticeId, {
         parser_job_ref: options?.parserJobId,
@@ -583,11 +602,13 @@ export default function ParserUploadPage() {
         ca_brief: options?.caBrief,
         next_steps_checklist: options?.nextStepsChecklist,
       });
-      setSaveNoticeMessage(
-        source === "auto"
-          ? "Notice auto-saved to Safe."
-          : "Notice saved to Safe."
-      );
+      if (!silent) {
+        setSaveNoticeMessage(
+          source === "auto"
+            ? "Notice auto-saved to Safe."
+            : "Notice saved to Safe."
+        );
+      }
       return true;
     } catch (error) {
       const fallback =
@@ -595,10 +616,14 @@ export default function ParserUploadPage() {
           ? "Parse completed, but auto-save failed. Use the Save button to retry."
           : "Could not save this notice to Safe right now.";
       const message = toUserMessage(error, fallback);
-      setSaveNoticeError(message);
+      if (!silent) {
+        setSaveNoticeError(message);
+      }
       return false;
     } finally {
-      setIsSavingNotice(false);
+      if (!silent) {
+        setIsSavingNotice(false);
+      }
     }
   };
 
@@ -641,15 +666,7 @@ export default function ParserUploadPage() {
         void saveDetectedNotice(job.notice, {
           source: "auto",
           parserJobId: job.id,
-          parserSnapshot: {
-            parser_job_id: job.id,
-            notice_code: job.notice_code || "",
-            status: job.status,
-            confidence: job.confidence,
-            deadline_date: job.extraction?.deadline_date || "",
-            legal_section: job.extraction?.legal_section || "",
-            amount_claimed: job.extraction?.amount_claimed || "",
-          },
+          parserSnapshot: buildParserSnapshot(job, uploadBrief, uploadChecklist),
           actionStatus: "not_started",
           caBrief: uploadBrief,
           nextStepsChecklist: uploadChecklist,
@@ -876,20 +893,56 @@ export default function ParserUploadPage() {
     await saveDetectedNotice(parserJob.notice, {
       source: "manual",
       parserJobId: parserJob.id,
-      parserSnapshot: {
-        parser_job_id: parserJob.id,
-        notice_code: parserJob.notice_code || "",
-        status: parserJob.status,
-        confidence: parserJob.confidence,
-        deadline_date: parserJob.extraction?.deadline_date || "",
-        legal_section: parserJob.extraction?.legal_section || "",
-        amount_claimed: parserJob.extraction?.amount_claimed || "",
-      },
+      parserSnapshot: buildParserSnapshot(parserJob, caBrief, actionChecklist),
       actionStatus: "not_started",
       caBrief,
       nextStepsChecklist: actionChecklist,
     });
   };
+
+  useEffect(() => {
+    if (!parserJob?.notice || !parserJob.id || isLoadingNoticeExplain) {
+      return;
+    }
+    const syncKey = [
+      parserJob.id,
+      detectedNotice?.code || "unmapped",
+      parserJob.extraction?.legal_section || "na",
+      parserJob.extraction?.deadline_date || "na",
+      actionChecklist.join("|"),
+    ].join("::");
+    if (syncKey === lastSafeSyncKey) {
+      return;
+    }
+
+    let cancelled = false;
+    const syncSafeEntry = async () => {
+      const saved = await saveDetectedNotice(parserJob.notice as number, {
+        source: "auto",
+        parserJobId: parserJob.id,
+        parserSnapshot: buildParserSnapshot(parserJob, caBrief, actionChecklist),
+        actionStatus: "not_started",
+        caBrief,
+        nextStepsChecklist: actionChecklist,
+        silent: true,
+      });
+      if (!cancelled && saved) {
+        setLastSafeSyncKey(syncKey);
+      }
+    };
+
+    void syncSafeEntry();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    parserJob,
+    detectedNotice?.code,
+    isLoadingNoticeExplain,
+    caBrief,
+    actionChecklist,
+    lastSafeSyncKey,
+  ]);
 
   const handleCopyBrief = async () => {
     try {
@@ -927,7 +980,7 @@ export default function ParserUploadPage() {
           </div>
         </div>
 
-        <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,1fr)]">
           <div className="rounded-[28px] border border-slate-200/80 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:p-7">
             <p className="inline-flex rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-cyan-700">
               Paid parser flow
@@ -946,6 +999,7 @@ export default function ParserUploadPage() {
                   Notice code (optional)
                 </label>
                 <input
+                  type="text"
                   value={noticeCode}
                   onChange={(event) => setNoticeCode(event.target.value.toUpperCase())}
                   placeholder="Example: GST-DRC-01"
@@ -1011,97 +1065,256 @@ export default function ParserUploadPage() {
                 {errorMessage}
               </div>
             )}
+          </div>
 
-            {parserJob && (
-              <div className="mt-6 space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+          <aside className="grid gap-4 lg:grid-rows-[auto_auto_1fr]">
+            <section className="rounded-[24px] border border-slate-200/80 bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    Parser result
+                    Credits
                   </p>
-                  <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200">
-                    {parserJob.status.replace("_", " ")}
-                  </span>
+                  <p className="font-display mt-2 text-3xl font-bold text-slate-900">
+                    {loadingBootstrap ? "..." : entitlements?.parser_credits ?? 0}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Available parser unlocks for your account.
+                  </p>
                 </div>
-                <div className="rounded-[28px] border border-slate-900/10 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-900 p-5 text-white shadow-[0_20px_80px_rgba(15,23,42,0.24)] sm:p-6">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-200/90">
-                        What Complia found in your uploaded notice
-                      </p>
-                      <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-                        {decisionSummary.headline}
+                <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-900">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-700">
+                    Outcome
+                  </p>
+                  <p className="mt-1 leading-6">
+                    Upload once, unlock a case-ready summary, and save the CA brief into Safe automatically.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-[24px] border border-slate-200/80 bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-6">
+              <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr] xl:items-start">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Payment plan
+                  </p>
+                  {selectedPlan ? (
+                    <>
+                      <h2 className="font-display mt-2 text-2xl font-bold tracking-tight text-slate-900">
+                        {formatCurrencyINR(selectedPlan.amount_inr)}
                       </h2>
-                    </div>
-                    <span
-                      className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                        riskBand === "critical"
-                          ? "bg-rose-400/15 text-rose-100 ring-1 ring-rose-200/20"
-                          : riskBand === "high"
-                            ? "bg-amber-300/15 text-amber-100 ring-1 ring-amber-200/20"
-                            : riskBand === "medium"
-                              ? "bg-sky-300/15 text-sky-100 ring-1 ring-sky-200/20"
-                              : "bg-emerald-300/15 text-emerald-100 ring-1 ring-emerald-200/20"
-                      }`}
-                    >
-                      {riskBand} priority
-                    </span>
-                  </div>
-                  <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-100/90 sm:text-[15px]">
-                    {decisionSummary.explanation}
-                  </p>
-                  <div className="mt-4 grid gap-3 lg:grid-cols-[1.25fr_0.75fr]">
-                    <div className="rounded-2xl border border-white/10 bg-white/6 p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100/80">
-                        Immediate next move
+                      <p className="mt-1 text-sm text-slate-600">{selectedPlan.name}</p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {selectedPlan.credits} parser credit{selectedPlan.credits > 1 ? "s" : ""} per payment.
                       </p>
-                      <p className="mt-2 text-sm leading-7 text-white/90">
-                        {decisionSummary.nextMove}
+                      <p className="mt-3 text-sm leading-6 text-slate-700">
+                        {selectedPlan.description || "One payment unlocks one parser result instantly."}
                       </p>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/6 p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100/80">
-                        Why this paid parse is different
-                      </p>
-                      <ul className="mt-2 space-y-2 text-sm text-white/85">
-                        <li>Matched against your actual uploaded document, not just a generic search.</li>
-                        <li>Pulls out the response deadline, legal section, and urgency in one view.</li>
-                        <li>Creates a CA-ready brief and saves the case to Safe for follow-up.</li>
-                      </ul>
-                    </div>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-sm text-slate-600">No active plans available right now.</p>
+                  )}
+
+                  <div className="mt-4 space-y-2">
+                    {plans.map((plan) => (
+                      <button
+                        key={plan.key}
+                        type="button"
+                        onClick={() => setSelectedPlanKey(plan.key)}
+                        className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition ${
+                          selectedPlanKey === plan.key
+                            ? "border-blue-300 bg-blue-50 text-blue-800"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold">{plan.name}</span>
+                          <span>{formatCurrencyINR(plan.amount_inr)}</span>
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 </div>
+
+                <div className="space-y-4">
+                  {(paymentRequired || (pendingUpload && !isUploading)) && (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                        Checkout
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => void startPayment()}
+                          disabled={isProcessingPayment || isVerifyingPayment || !selectedPlan}
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
+                        >
+                          {(isProcessingPayment || isVerifyingPayment) && (
+                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                          )}
+                          {isProcessingPayment
+                            ? "Opening checkout..."
+                            : isVerifyingPayment
+                              ? "Verifying payment..."
+                              : pendingUploadName
+                                ? `Pay ${selectedPlan ? formatCurrencyINR(selectedPlan.amount_inr) : ""} & Continue (${pendingUploadName})`
+                                : `Pay ${selectedPlan ? formatCurrencyINR(selectedPlan.amount_inr) : ""} & Unlock`}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void verifyPaymentAndResume()}
+                          disabled={isProcessingPayment || isVerifyingPayment || !pendingUpload}
+                          className="inline-flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:opacity-60"
+                        >
+                          I already paid, check again
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {ENABLE_TEST_PAYMENT && isLoggedIn && isAdminUser && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-700">
+                        Internal testing
+                      </p>
+                      <p className="mt-1 text-xs text-amber-800">
+                        Simulates payment success and credits without charging a real payment method.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void startTestPaymentSimulation()}
+                        disabled={isSimulatingPayment || isUploading || isProcessingPayment || isVerifyingPayment || !selectedPlan}
+                        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-60"
+                      >
+                        {isSimulatingPayment && (
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-300 border-t-amber-700" />
+                        )}
+                        {isSimulatingPayment ? "Simulating payment..." : "Simulate Payment Success"}
+                      </button>
+                    </div>
+                  )}
+
+                  {!isLoggedIn && (
+                    <Link
+                      to={`/login?next=${encodeURIComponent(`/parser?notice=${noticeCode}`)}`}
+                      className="inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
+                    >
+                      Sign in to continue
+                    </Link>
+                  )}
+
+                  <section className="rounded-[24px] border border-slate-200/80 bg-white p-5 text-sm text-slate-600 shadow-[0_20px_60px_rgba(15,23,42,0.07)]">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      How it works
+                    </p>
+                    <ol className="mt-3 space-y-2">
+                      <li>1. Upload your notice file.</li>
+                      <li>2. Complete secure Cashfree checkout.</li>
+                      <li>3. Result unlocks with extracted fields, risk checklist, and CA handoff brief.</li>
+                    </ol>
+                    <Link
+                      to={`/ca-help?notice=${encodeURIComponent(parserJob?.notice_code || noticeCode || "")}`}
+                      className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+                    >
+                      Talk to a CA
+                    </Link>
+                  </section>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </section>
+
+        {parserJob && (
+          <section className="mt-6 space-y-4 rounded-[28px] border border-slate-200/80 bg-white p-4 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Parser result
+              </p>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200">
+                {parserJob.status.replace("_", " ")}
+              </span>
+            </div>
+
+            <div className="rounded-[28px] border border-slate-900/10 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-900 p-5 text-white shadow-[0_20px_80px_rgba(15,23,42,0.24)] sm:p-7">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-200/90">
+                    What Complia found in your uploaded notice
+                  </p>
+                  <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-4xl">
+                    {decisionSummary.headline}
+                  </h2>
+                </div>
+                <span
+                  className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                    riskBand === "critical"
+                      ? "bg-rose-400/15 text-rose-100 ring-1 ring-rose-200/20"
+                      : riskBand === "high"
+                        ? "bg-amber-300/15 text-amber-100 ring-1 ring-amber-200/20"
+                        : riskBand === "medium"
+                          ? "bg-sky-300/15 text-sky-100 ring-1 ring-sky-200/20"
+                          : "bg-emerald-300/15 text-emerald-100 ring-1 ring-emerald-200/20"
+                  }`}
+                >
+                  {riskBand} priority
+                </span>
+              </div>
+              <p className="mt-4 max-w-4xl text-sm leading-7 text-slate-100/90 sm:text-[15px]">
+                {decisionSummary.explanation}
+              </p>
+              <div className="mt-5 grid gap-3 xl:grid-cols-[1.3fr_0.7fr]">
+                <div className="rounded-2xl border border-white/10 bg-white/6 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100/80">
+                    Immediate next move
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-white/90">
+                    {decisionSummary.nextMove}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/6 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100/80">
+                    Why this paid parse is different
+                  </p>
+                  <ul className="mt-2 space-y-2 text-sm text-white/85">
+                    <li>Matched against your actual uploaded document, not just a generic search.</li>
+                    <li>Pulls out the response deadline, legal section, and urgency in one view.</li>
+                    <li>Creates a CA-ready brief and saves the case to Safe for follow-up.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+              <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Notice detected</p>
                     <p className="mt-1 text-sm font-semibold text-slate-900">
                       {parserJob.notice_code || "Not detected"}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Confidence</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">
-                      {confidencePercent}%
-                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">{confidencePercent}%</p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Legal section</p>
                     <p className="mt-1 text-sm font-semibold text-slate-900">
                       {parserJob.extraction?.legal_section || "Not detected"}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Amount claimed</p>
                     <p className="mt-1 text-sm font-semibold text-slate-900">
                       {parserJob.extraction?.amount_claimed || "Not detected"}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Reply deadline</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">
-                      {replyDeadlineLabel}
-                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">{replyDeadlineLabel}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Urgency guidance</p>
                     <p className="mt-1 text-sm font-semibold text-slate-900">{urgencyText}</p>
                     {deadlineDaysLeft !== null && (
@@ -1122,7 +1335,7 @@ export default function ParserUploadPage() {
                   </div>
                 )}
 
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                       Personalized response pack
@@ -1145,7 +1358,7 @@ export default function ParserUploadPage() {
                 </div>
 
                 {(ocrUsed || lowConfidence) && (
-                  <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
                     <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">OCR context</p>
                     {ocrUsed ? (
                       <p className="mt-1 text-sm font-semibold text-slate-900">
@@ -1169,55 +1382,15 @@ export default function ParserUploadPage() {
                     )}
                   </div>
                 )}
+              </div>
 
-                <div className="rounded-xl border border-slate-200 bg-white p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">CA handoff brief</p>
-                    <button
-                      type="button"
-                      onClick={() => void handleCopyBrief()}
-                      className="text-xs font-semibold text-blue-700 transition hover:text-blue-800"
-                    >
-                      Copy brief
-                    </button>
-                  </div>
-                  <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-6 text-slate-700">
-                    {caBrief}
-                  </pre>
-                  {copyBriefMessage && <p className="mt-2 text-xs text-emerald-700">{copyBriefMessage}</p>}
-                </div>
-                {parserJob.extraction?.raw_text_excerpt && (
-                  <div className="rounded-xl border border-slate-200 bg-white p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">
-                        Text excerpt
-                      </p>
-                      {parserJob.extraction.raw_text_excerpt.length > 420 && (
-                        <button
-                          type="button"
-                          onClick={() => setShowFullExcerpt((value) => !value)}
-                          className="text-xs font-semibold text-blue-700 transition hover:text-blue-800"
-                        >
-                          {showFullExcerpt ? "Hide full text" : "Show full text"}
-                        </button>
-                      )}
-                    </div>
-                    <p className="mt-1 text-sm leading-6 text-slate-700">
-                      {showFullExcerpt
-                        ? parserJob.extraction.raw_text_excerpt
-                        : `${parserJob.extraction.raw_text_excerpt.slice(0, 420)}${
-                            parserJob.extraction.raw_text_excerpt.length > 420 ? "..." : ""
-                          }`}
-                    </p>
-                  </div>
-                )}
-
+              <div className="space-y-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
                   <p className="text-xs font-semibold uppercase tracking-[0.13em] text-blue-700">
                     Understand this notice
                   </p>
                   <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
-                    This section explains the detected notice in plain English. The cards above are specific to your uploaded document; the explanation below is the knowledge-base guidance for this notice type.
+                    This section explains the detected notice in plain English. The cards on the left are specific to your uploaded document; the explanation below is the knowledge-base guidance for this notice type.
                   </p>
 
                   {isLoadingNoticeExplain && (
@@ -1294,20 +1467,20 @@ export default function ParserUploadPage() {
 
                   <div className="mt-5 border-t border-slate-200 pt-4">
                     <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void handleSaveNotice()}
-                      disabled={isSavingNotice || !parserJob.notice}
-                      className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isSavingNotice ? "Saving..." : "Save to Safe"}
-                    </button>
-                    <Link
-                      to={`/ca-help?notice=${encodeURIComponent(parserJob.notice_code || noticeCode || "")}`}
-                      className="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
-                    >
-                      Talk to a CA
-                    </Link>
+                      <button
+                        type="button"
+                        onClick={() => void handleSaveNotice()}
+                        disabled={isSavingNotice || !parserJob.notice}
+                        className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isSavingNotice ? "Saving..." : "Save to Safe"}
+                      </button>
+                      <Link
+                        to={`/ca-help?notice=${encodeURIComponent(parserJob.notice_code || noticeCode || "")}`}
+                        className="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+                      >
+                        Talk to a CA
+                      </Link>
                     </div>
                     {!parserJob.notice && (
                       <p className="mt-2 text-xs text-slate-500">
@@ -1322,145 +1495,51 @@ export default function ParserUploadPage() {
                     )}
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
 
-          <aside className="space-y-4">
-            <section className="rounded-[24px] border border-slate-200/80 bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                Credits
-              </p>
-              <p className="font-display mt-2 text-3xl font-bold text-slate-900">
-                {loadingBootstrap ? "..." : entitlements?.parser_credits ?? 0}
-              </p>
-              <p className="mt-1 text-sm text-slate-600">
-                Available parser unlocks for your account.
-              </p>
-            </section>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">CA handoff brief</p>
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyBrief()}
+                      className="text-xs font-semibold text-blue-700 transition hover:text-blue-800"
+                    >
+                      Copy brief
+                    </button>
+                  </div>
+                  <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-6 text-slate-700">
+                    {caBrief}
+                  </pre>
+                  {copyBriefMessage && <p className="mt-2 text-xs text-emerald-700">{copyBriefMessage}</p>}
+                </div>
 
-            <section className="rounded-[24px] border border-slate-200/80 bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                Payment plan
-              </p>
-              {selectedPlan ? (
-                <>
-                  <h2 className="font-display mt-2 text-2xl font-bold tracking-tight text-slate-900">
-                    {formatCurrencyINR(selectedPlan.amount_inr)}
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-600">{selectedPlan.name}</p>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {selectedPlan.credits} parser credit{selectedPlan.credits > 1 ? "s" : ""} per
-                    payment.
-                  </p>
-                  <p className="mt-3 text-sm leading-6 text-slate-700">
-                    {selectedPlan.description || "One payment unlocks one parser result instantly."}
-                  </p>
-                </>
-              ) : (
-                <p className="mt-2 text-sm text-slate-600">No active plans available right now.</p>
-              )}
-
-              <div className="mt-4 space-y-2">
-                {plans.map((plan) => (
-                  <button
-                    key={plan.key}
-                    type="button"
-                    onClick={() => setSelectedPlanKey(plan.key)}
-                    className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition ${
-                      selectedPlanKey === plan.key
-                        ? "border-blue-300 bg-blue-50 text-blue-800"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold">{plan.name}</span>
-                      <span>{formatCurrencyINR(plan.amount_inr)}</span>
+                {parserJob.extraction?.raw_text_excerpt && (
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Text excerpt</p>
+                      {parserJob.extraction.raw_text_excerpt.length > 420 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowFullExcerpt((value) => !value)}
+                          className="text-xs font-semibold text-blue-700 transition hover:text-blue-800"
+                        >
+                          {showFullExcerpt ? "Hide full text" : "Show full text"}
+                        </button>
+                      )}
                     </div>
-                  </button>
-                ))}
+                    <p className="mt-1 text-sm leading-6 text-slate-700">
+                      {showFullExcerpt
+                        ? parserJob.extraction.raw_text_excerpt
+                        : `${parserJob.extraction.raw_text_excerpt.slice(0, 420)}${
+                            parserJob.extraction.raw_text_excerpt.length > 420 ? "..." : ""
+                          }`}
+                    </p>
+                  </div>
+                )}
               </div>
-
-              {(paymentRequired || (pendingUpload && !isUploading)) && (
-                <div className="mt-5 space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => void startPayment()}
-                    disabled={isProcessingPayment || isVerifyingPayment || !selectedPlan}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
-                  >
-                    {(isProcessingPayment || isVerifyingPayment) && (
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    )}
-                    {isProcessingPayment
-                      ? "Opening checkout..."
-                      : isVerifyingPayment
-                        ? "Verifying payment..."
-                        : pendingUploadName
-                          ? `Pay ${selectedPlan ? formatCurrencyINR(selectedPlan.amount_inr) : ""} & Continue (${pendingUploadName})`
-                          : `Pay ${selectedPlan ? formatCurrencyINR(selectedPlan.amount_inr) : ""} & Unlock`}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void verifyPaymentAndResume()}
-                    disabled={isProcessingPayment || isVerifyingPayment || !pendingUpload}
-                    className="inline-flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:opacity-60"
-                  >
-                    I already paid, check again
-                  </button>
-                </div>
-              )}
-
-              {ENABLE_TEST_PAYMENT && isLoggedIn && isAdminUser && (
-                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-700">
-                    Internal testing
-                  </p>
-                  <p className="mt-1 text-xs text-amber-800">
-                    Simulates payment success and credits without charging a real payment method.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void startTestPaymentSimulation()}
-                    disabled={isSimulatingPayment || isUploading || isProcessingPayment || isVerifyingPayment || !selectedPlan}
-                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-60"
-                  >
-                    {isSimulatingPayment && (
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-300 border-t-amber-700" />
-                    )}
-                    {isSimulatingPayment ? "Simulating payment..." : "Simulate Payment Success"}
-                  </button>
-                </div>
-              )}
-
-              {!isLoggedIn && (
-                <Link
-                  to={`/login?next=${encodeURIComponent(`/parser?notice=${noticeCode}`)}`}
-                  className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
-                >
-                  Sign in to continue
-                </Link>
-              )}
-            </section>
-
-            <section className="rounded-[24px] border border-slate-200/80 bg-white p-5 text-sm text-slate-600 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                How it works
-              </p>
-              <ol className="mt-3 space-y-2">
-                <li>1. Upload your notice file.</li>
-                <li>2. Complete secure Cashfree checkout.</li>
-                <li>3. Result unlocks with extracted fields, risk checklist, and CA handoff brief.</li>
-              </ol>
-              <Link
-                to={`/ca-help?notice=${encodeURIComponent(parserJob?.notice_code || noticeCode || "")}`}
-                className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
-              >
-                Talk to a CA
-              </Link>
-            </section>
-          </aside>
-        </section>
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );

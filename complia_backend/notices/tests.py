@@ -479,6 +479,53 @@ class NoticeAPITests(APITestCase):
         self.assertIsNone(parsed["amount_claimed"])
         self.assertEqual(parsed["deadline_date"].isoformat(), "2024-12-23")
 
+    def test_parse_notice_document_prefers_contextual_amount_over_ocr_noise(self):
+        NoticeType.objects.create(
+            code="GST-DRC-01",
+            title="Demand Order",
+            summary="Demand notice",
+            detailed_explanation="Explanation",
+            consequences_of_ignoring="Penalty",
+            next_steps="Reply",
+            severity="high",
+            is_active=True,
+        )
+        parsed = parse_notice_document(
+            (
+                "GST DRC-01 demand order\n"
+                "RIFF WEBP random OCR 8.00 5F% noise\n"
+                "Tax payable of INR 125000 must be discharged.\n"
+                "U/S 73 reply required.\n"
+            ),
+            "drc01.txt",
+        )
+
+        self.assertEqual(parsed["notice"].code, "GST-DRC-01")
+        self.assertEqual(str(parsed["amount_claimed"]), "125000")
+        self.assertEqual(parsed["legal_section"], "Section 73")
+
+    def test_parse_notice_document_reads_sec_shorthand(self):
+        notice = NoticeType.objects.create(
+            code="IT-148",
+            title="Income Escaping Assessment",
+            summary="Reassessment",
+            detailed_explanation="Explanation",
+            consequences_of_ignoring="Penalty",
+            next_steps="Reply",
+            severity="high",
+            is_active=True,
+        )
+        TriggerKeyword.objects.create(notice_type=notice, keyword="escaped assessment")
+
+        parsed = parse_notice_document(
+            "Notice under sec. 148 for escaped assessment. Respond before 14/04/2026.",
+            "section148.txt",
+        )
+
+        self.assertEqual(parsed["notice"].code, "IT-148")
+        self.assertEqual(parsed["legal_section"], "Section 148")
+        self.assertEqual(parsed["deadline_date"].isoformat(), "2026-04-14")
+
     @override_settings(PARSER_PRIVATE_BETA_ENABLED=True, PARSER_BETA_EMAILS={"beta5@complia.in"})
     def test_parser_upload_sanitizes_nul_bytes_for_text_payload(self):
         beta_user = User.objects.create_user(email="beta5@complia.in", password="pass123456", user_type="taxpayer")
