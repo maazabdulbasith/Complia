@@ -1,4 +1,4 @@
-import type { Dispatch, ReactNode, SetStateAction } from "react";
+﻿import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useOutletContext, Link } from "react-router";
 
 import type {
@@ -33,7 +33,7 @@ export function PaymentStatusPill({ status }: { status: AdminPaymentOrder["admin
         ? "bg-rose-100 text-rose-700"
         : status === "abandoned"
           ? "bg-amber-100 text-amber-800"
-          : "bg-sky-100 text-sky-700";
+          : "bg-indigo-100 text-indigo-800";
   return (
     <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${className}`}>
       {status}

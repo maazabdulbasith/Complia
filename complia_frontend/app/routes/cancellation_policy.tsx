@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+﻿import { Link } from "react-router";
 import BrandMark from "../lib/brand_mark";
 
 import type { Route } from "./+types/cancellation_policy";
@@ -24,7 +24,7 @@ export default function CancellationPolicyPage() {
           <BrandMark to="/" imageClassName="h-9 w-auto" />
           <Link
             to="/"
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800"
           >
             <span aria-hidden>&larr;</span> Back to home
           </Link>
@@ -87,19 +87,19 @@ export default function CancellationPolicyPage() {
 
         <div className="mt-8 border-t border-slate-200 pt-5 text-sm text-slate-600">
           Read related pages:{" "}
-          <Link to="/contact-us" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/contact-us" className="font-semibold text-indigo-800 hover:underline">
             Contact Us
           </Link>
           ,{" "}
-          <Link to="/refund-policy" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/refund-policy" className="font-semibold text-indigo-800 hover:underline">
             Refund Policy
           </Link>
           ,{" "}
-          <Link to="/terms-and-conditions" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/terms-and-conditions" className="font-semibold text-indigo-800 hover:underline">
             Terms and Conditions
           </Link>
           , and{" "}
-          <Link to="/privacy-policy" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/privacy-policy" className="font-semibold text-indigo-800 hover:underline">
             Privacy Policy
           </Link>
           .

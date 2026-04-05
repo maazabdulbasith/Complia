@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 
 import {
@@ -309,10 +309,10 @@ export default function SuperAdminLayout() {
     const newIntentCount = assistedIntents.filter((item) => item.status === "new").length;
     const paymentAttentionCount = paymentStatusCounts.initiated + paymentStatusCounts.abandoned + paymentStatusCounts.failed;
     return [
-      { id: "payments-open", label: "Payments needing attention", count: paymentAttentionCount, tone: "border-sky-200 bg-sky-50 text-sky-900", to: "/superadmin/payments" },
+      { id: "payments-open", label: "Payments needing attention", count: paymentAttentionCount, tone: "border-indigo-200 bg-indigo-50 text-indigo-900", to: "/superadmin/payments" },
       { id: "parser-review", label: "Parser reviews pending", count: parserReviewCount, tone: "border-amber-200 bg-amber-50 text-amber-900", to: "/superadmin/parser-queue" },
       { id: "assisted-new", label: "New assisted intents", count: newIntentCount, tone: "border-indigo-200 bg-indigo-50 text-indigo-900", to: "/superadmin/assisted-intents" },
-      { id: "ca-new", label: "CA cases ready to assign", count: readyToAssignCount, tone: "border-cyan-200 bg-cyan-50 text-cyan-900", to: "/superadmin/ca-requests" },
+      { id: "ca-new", label: "CA cases ready to assign", count: readyToAssignCount, tone: "border-indigo-200 bg-indigo-50 text-indigo-900", to: "/superadmin/ca-requests" },
       { id: "feedback-new", label: "New feedback items", count: newFeedbackCount, tone: "border-rose-200 bg-rose-50 text-rose-900", to: "/superadmin/feedback" },
     ];
   }, [assistedIntents, caRequests, feedbackItems, parserJobs, paymentStatusCounts]);
@@ -399,11 +399,11 @@ export default function SuperAdminLayout() {
     : null;
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-slate-100 via-indigo-50 to-cyan-50 text-slate-900">
+    <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-slate-100 via-indigo-50 to-indigo-50 text-slate-900">
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
         <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <BrandMark to="/" imageClassName="h-9 w-9" />
+            <BrandMark to="/" imageClassName="h-9 w-auto" />
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-500">Complia Operations</p>
             <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">SuperAdmin Command Center</h1>
             <p className="mt-2 text-slate-600">Multi-page operations workspace for product, payments, parser, and case handling.</p>

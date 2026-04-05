@@ -13,7 +13,7 @@ function severityTone(severity: "low" | "medium" | "high") {
   if (severity === "medium") {
     return "bg-amber-50 text-amber-700 ring-amber-200";
   }
-  return "bg-sky-50 text-sky-700 ring-sky-200";
+  return "bg-indigo-50 text-indigo-800 ring-indigo-200";
 }
 
 function actionTone(status: "not_started" | "in_progress" | "done") {
@@ -21,7 +21,7 @@ function actionTone(status: "not_started" | "in_progress" | "done") {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   }
   if (status === "in_progress") {
-    return "bg-blue-50 text-blue-700 ring-blue-200";
+    return "bg-indigo-50 text-indigo-800 ring-indigo-200";
   }
   return "bg-slate-50 text-slate-700 ring-slate-200";
 }
@@ -60,7 +60,7 @@ function formatDate(value: string): string {
 
 function caseStatusTone(status: "new" | "triaged" | "assigned" | "contacted" | "engaged" | "resolved" | "closed") {
   if (status === "resolved" || status === "closed") return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-  if (status === "engaged" || status === "contacted") return "bg-blue-50 text-blue-700 ring-blue-200";
+  if (status === "engaged" || status === "contacted") return "bg-indigo-50 text-indigo-800 ring-indigo-200";
   if (status === "assigned" || status === "triaged") return "bg-amber-50 text-amber-700 ring-amber-200";
   return "bg-slate-50 text-slate-700 ring-slate-200";
 }
@@ -159,13 +159,13 @@ export default function SavedNoticesPage() {
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <BrandMark to="/" imageClassName="h-9 w-auto" />
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">My workspace</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-800">My workspace</p>
             <h1 className="font-display mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Safe</h1>
             <p className="mt-1 text-sm text-slate-600">Your saved notices, parser outputs, and next actions in one place.</p>
           </div>
           <Link
             to="/"
-            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-800"
           >
             Back to search
           </Link>
@@ -258,10 +258,10 @@ export default function SavedNoticesPage() {
 
                   <p className="mt-2 text-sm leading-6 text-slate-600">{item.notice.summary}</p>
 
-                  <div className="mt-4 rounded-2xl border border-slate-900/10 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-900 p-5 text-white shadow-[0_20px_50px_rgba(15,23,42,0.14)]">
+                  <div className="mt-4 rounded-2xl border border-slate-900/10 bg-gradient-to-br from-slate-950 via-slate-900 to-[#132f72] p-5 text-white shadow-[0_20px_50px_rgba(15,23,42,0.14)]">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-200/90">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-indigo-200/90">
                           Saved parser workspace
                         </p>
                         <h3 className="mt-2 text-2xl font-bold tracking-tight">{decisionHeadline}</h3>
@@ -277,7 +277,7 @@ export default function SavedNoticesPage() {
                     )}
                     {immediateNextMove && (
                       <div className="mt-4 rounded-2xl border border-white/10 bg-white/6 p-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100/80">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-100/80">
                           Immediate next move
                         </p>
                         <p className="mt-2 text-sm leading-7 text-white/90">{immediateNextMove}</p>
@@ -317,10 +317,10 @@ export default function SavedNoticesPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-cyan-200 bg-cyan-50 p-4">
+                  <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-700">CA request status</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-800">CA request status</p>
                         <p className="mt-1 text-sm text-slate-700">
                           {caRequest
                             ? "Track where your CA handoff currently stands."
@@ -346,7 +346,7 @@ export default function SavedNoticesPage() {
                       <div className="mt-3">
                         <Link
                           to={`/ca-help?notice=${encodeURIComponent(item.notice.code)}`}
-                          className="inline-flex rounded-xl border border-cyan-200 bg-white px-4 py-2 text-sm font-semibold text-cyan-700 transition hover:bg-cyan-100"
+                          className="inline-flex rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-semibold text-indigo-800 transition hover:bg-indigo-100"
                         >
                           Start CA request
                         </Link>
@@ -357,7 +357,7 @@ export default function SavedNoticesPage() {
                   <div className="mt-4 grid gap-4 lg:grid-cols-2">
                     {item.notice.why_received && (
                       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-700">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-800">
                           Why you likely got this
                         </p>
                         <p className="mt-2 text-sm leading-7 text-slate-700">{item.notice.why_received}</p>
@@ -374,26 +374,26 @@ export default function SavedNoticesPage() {
                   </div>
 
                   {item.notice.next_steps && (
-                    <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-700">
+                    <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-800">
                         What to do next
                       </p>
-                      <p className="mt-2 whitespace-pre-line text-sm leading-7 text-blue-900">{item.notice.next_steps}</p>
+                      <p className="mt-2 whitespace-pre-line text-sm leading-7 text-indigo-900">{item.notice.next_steps}</p>
                     </div>
                   )}
 
-                  <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3">
+                  <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-700">CA brief</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-800">CA brief</p>
                       <button
                         type="button"
                         onClick={() => void copyCABrief(item.id, caBrief)}
-                        className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+                        className="rounded-md border border-indigo-200 bg-white px-2.5 py-1 text-xs font-semibold text-indigo-800 transition hover:bg-indigo-100"
                       >
                         Copy CA brief
                       </button>
                     </div>
-                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-blue-900">
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-indigo-900">
                       {caBrief || "No CA brief saved yet."}
                     </p>
                     {copyMessageId === item.id && (
@@ -420,13 +420,13 @@ export default function SavedNoticesPage() {
 
                     <Link
                       to={`/notice/${item.notice.code}`}
-                      className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                      className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800"
                     >
                       Open notice
                     </Link>
                     <Link
                       to={`/ca-help?notice=${encodeURIComponent(item.notice.code)}`}
-                      className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+                      className="inline-flex items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-800 transition hover:bg-indigo-100"
                     >
                       Talk to a CA
                     </Link>
@@ -451,10 +451,10 @@ export default function SavedNoticesPage() {
         )}
 
         {!loading && unlinkedCARequests.length > 0 && (
-          <section className="mt-6 rounded-2xl border border-cyan-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.05)]">
+          <section className="mt-6 rounded-2xl border border-indigo-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.05)]">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-700">CA request tracker</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-800">CA request tracker</p>
                 <h2 className="font-display mt-1 text-2xl font-bold tracking-tight text-slate-900">Advisor follow-up status</h2>
                 <p className="mt-1 text-sm text-slate-600">This includes homepage or general CA requests even when they were not started from a saved notice.</p>
               </div>

@@ -1,4 +1,4 @@
-import { AdminPageIntro, OverviewActionLink, SectionHeader, StatCard, useSuperAdmin } from "./shared";
+﻿import { AdminPageIntro, OverviewActionLink, SectionHeader, StatCard, useSuperAdmin } from "./shared";
 
 export default function SuperAdminOverviewPage() {
   const { metrics, funnel, kpis, windowSize, setWindowSize, actionQueueItems } = useSuperAdmin();
@@ -13,7 +13,7 @@ export default function SuperAdminOverviewPage() {
       />
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Visitors Till Date" value={metrics.total_visitors} accent="text-indigo-600" />
-        <StatCard label="Visitors Today" value={metrics.visitors_today} accent="text-cyan-600" />
+        <StatCard label="Visitors Today" value={metrics.visitors_today} accent="text-indigo-600" />
         <StatCard label="Total Searches" value={metrics.total_searches} accent="text-violet-600" />
         <StatCard label="CA Help Requests" value={metrics.ca_help_submissions} accent="text-rose-600" />
       </section>

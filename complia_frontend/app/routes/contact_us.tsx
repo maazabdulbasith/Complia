@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+﻿import { Link } from "react-router";
 import BrandMark from "../lib/brand_mark";
 
 import type { Route } from "./+types/contact_us";
@@ -21,7 +21,7 @@ export default function ContactUsPage() {
           <BrandMark to="/" imageClassName="h-9 w-auto" />
           <Link
             to="/"
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800"
           >
             <span aria-hidden>&larr;</span> Back to home
           </Link>
@@ -44,7 +44,7 @@ export default function ContactUsPage() {
               Primary contact:{" "}
               <a
                 href="mailto:admin@complia.in"
-                className="font-semibold text-blue-700 transition hover:text-blue-800 hover:underline"
+                className="font-semibold text-indigo-800 transition hover:text-indigo-900 hover:underline"
               >
                 admin@complia.in
               </a>
@@ -70,7 +70,7 @@ export default function ContactUsPage() {
               assignment, or service-quality escalation, email{" "}
               <a
                 href="mailto:admin@complia.in"
-                className="font-semibold text-blue-700 transition hover:text-blue-800 hover:underline"
+                className="font-semibold text-indigo-800 transition hover:text-indigo-900 hover:underline"
               >
                 admin@complia.in
               </a>{" "}
@@ -81,19 +81,19 @@ export default function ContactUsPage() {
 
         <div className="mt-8 border-t border-slate-200 pt-5 text-sm text-slate-600">
           Also see our{" "}
-          <Link to="/terms-and-conditions" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/terms-and-conditions" className="font-semibold text-indigo-800 hover:underline">
             Terms and Conditions
           </Link>
           ,{" "}
-          <Link to="/privacy-policy" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/privacy-policy" className="font-semibold text-indigo-800 hover:underline">
             Privacy Policy
           </Link>
           ,{" "}
-          <Link to="/refund-policy" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/refund-policy" className="font-semibold text-indigo-800 hover:underline">
             Refund Policy
           </Link>
           , and{" "}
-          <Link to="/cancellation-policy" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/cancellation-policy" className="font-semibold text-indigo-800 hover:underline">
             Cancellation Policy
           </Link>
           .

@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+﻿import { Link } from "react-router";
 import BrandMark from "../lib/brand_mark";
 
 import type { Route } from "./+types/privacy_policy";
@@ -24,7 +24,7 @@ export default function PrivacyPolicyPage() {
           <BrandMark to="/" imageClassName="h-9 w-auto" />
           <Link
             to="/"
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800"
           >
             <span aria-hidden>&larr;</span> Back to home
           </Link>
@@ -110,19 +110,19 @@ export default function PrivacyPolicyPage() {
 
         <div className="mt-8 border-t border-slate-200 pt-5 text-sm text-slate-600">
           Also see our{" "}
-          <Link to="/terms-and-conditions" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/terms-and-conditions" className="font-semibold text-indigo-800 hover:underline">
             Terms and Conditions
           </Link>
           ,{" "}
-          <Link to="/refund-policy" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/refund-policy" className="font-semibold text-indigo-800 hover:underline">
             Refund Policy
           </Link>
           , and{" "}
-          <Link to="/cancellation-policy" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/cancellation-policy" className="font-semibold text-indigo-800 hover:underline">
             Cancellation Policy
           </Link>
           , and{" "}
-          <Link to="/contact-us" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/contact-us" className="font-semibold text-indigo-800 hover:underline">
             Contact Us
           </Link>
           .

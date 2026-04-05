@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
 import {
@@ -1000,22 +1000,22 @@ export default function ParserUploadPage() {
 
   return (
     <div className="grid-aurora min-h-screen overflow-x-hidden px-4 py-8 text-slate-900 sm:px-5 sm:py-10">
-      <div className="pointer-events-none absolute -top-32 right-0 h-96 w-96 rounded-full bg-cyan-300/20 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-0 -left-20 h-80 w-80 rounded-full bg-blue-300/20 blur-3xl" />
+      <div className="pointer-events-none absolute -top-32 right-0 h-96 w-96 rounded-full bg-indigo-300/20 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 -left-20 h-80 w-80 rounded-full bg-indigo-300/20 blur-3xl" />
 
       <main className="relative z-10 mx-auto w-full max-w-6xl">
         <div className="mb-6 flex flex-wrap items-center gap-3">
-          <BrandMark to="/" imageClassName="h-9 w-9" className="shrink-0" />
+          <BrandMark to="/" imageClassName="h-9 w-auto" className="shrink-0" />
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
             <Link
               to="/"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800"
             >
               <span aria-hidden>&larr;</span> Back to search
             </Link>
             <Link
               to="/saved"
-              className="inline-flex items-center rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 sm:text-sm"
+              className="inline-flex items-center rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800 sm:text-sm"
             >
               Safe
             </Link>
@@ -1024,7 +1024,7 @@ export default function ParserUploadPage() {
 
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,1fr)]">
           <div className="rounded-[28px] border border-slate-200/80 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:p-7">
-            <p className="inline-flex rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-cyan-700">
+            <p className="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-indigo-800">
               Paid parser flow
             </p>
             <h1 className="font-display mt-4 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
@@ -1045,7 +1045,7 @@ export default function ParserUploadPage() {
                   value={noticeCode}
                   onChange={(event) => setNoticeCode(event.target.value.toUpperCase())}
                   placeholder="Example: GST-DRC-01"
-                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-100"
                 />
               </div>
 
@@ -1075,7 +1075,7 @@ export default function ParserUploadPage() {
               <button
                 type="submit"
                 disabled={isUploading || isProcessingPayment || isVerifyingPayment}
-                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-6 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:brightness-110 disabled:opacity-60"
+                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#102a6b] to-[#163a86] px-6 text-sm font-semibold text-white shadow-lg shadow-[#102a6b]/25 transition hover:brightness-110 disabled:opacity-60"
               >
                 {(isUploading || isProcessingPayment || isVerifyingPayment) && (
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -1123,8 +1123,8 @@ export default function ParserUploadPage() {
                     Available parser unlocks for your account.
                   </p>
                 </div>
-                <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-900">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-700">
+                <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-800">
                     Outcome
                   </p>
                   <p className="mt-1 leading-6">
@@ -1165,7 +1165,7 @@ export default function ParserUploadPage() {
                         onClick={() => setSelectedPlanKey(plan.key)}
                         className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition ${
                           selectedPlanKey === plan.key
-                            ? "border-blue-300 bg-blue-50 text-blue-800"
+                            ? "border-indigo-300 bg-indigo-50 text-indigo-900"
                             : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
                         }`}
                       >
@@ -1206,7 +1206,7 @@ export default function ParserUploadPage() {
                           type="button"
                           onClick={() => void verifyPaymentAndResume()}
                           disabled={isProcessingPayment || isVerifyingPayment || !pendingUpload}
-                          className="inline-flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:opacity-60"
+                          className="inline-flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800 disabled:opacity-60"
                         >
                           I already paid, check again
                         </button>
@@ -1256,7 +1256,7 @@ export default function ParserUploadPage() {
                     </ol>
                     <Link
                       to={`/ca-help?notice=${encodeURIComponent(parserJob?.notice_code || noticeCode || "")}`}
-                      className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+                      className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-800 transition hover:bg-indigo-100"
                     >
                       Talk to a CA
                     </Link>
@@ -1278,10 +1278,10 @@ export default function ParserUploadPage() {
               </span>
             </div>
 
-            <div className="rounded-[28px] border border-slate-900/10 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-900 p-5 text-white shadow-[0_20px_80px_rgba(15,23,42,0.24)] sm:p-7">
+            <div className="rounded-[28px] border border-slate-900/10 bg-gradient-to-br from-slate-950 via-slate-900 to-[#132f72] p-5 text-white shadow-[0_20px_80px_rgba(15,23,42,0.24)] sm:p-7">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-200/90">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-indigo-200/90">
                     What Complia found in your uploaded notice
                   </p>
                   <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-4xl">
@@ -1295,7 +1295,7 @@ export default function ParserUploadPage() {
                       : riskBand === "high"
                         ? "bg-amber-300/15 text-amber-100 ring-1 ring-amber-200/20"
                         : riskBand === "medium"
-                          ? "bg-sky-300/15 text-sky-100 ring-1 ring-sky-200/20"
+                          ? "bg-indigo-300/15 text-indigo-100 ring-1 ring-indigo-200/20"
                           : "bg-emerald-300/15 text-emerald-100 ring-1 ring-emerald-200/20"
                   }`}
                 >
@@ -1307,7 +1307,7 @@ export default function ParserUploadPage() {
               </p>
               <div className="mt-5 grid gap-3 xl:grid-cols-[1.3fr_0.7fr]">
                 <div className="rounded-2xl border border-white/10 bg-white/6 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100/80">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-100/80">
                     Immediate next move
                   </p>
                   <p className="mt-2 text-sm leading-7 text-white/90">
@@ -1315,7 +1315,7 @@ export default function ParserUploadPage() {
                   </p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/6 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-100/80">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-100/80">
                     Why this paid parse is different
                   </p>
                   <ul className="mt-2 space-y-2 text-sm text-white/85">
@@ -1428,7 +1428,7 @@ export default function ParserUploadPage() {
 
               <div className="space-y-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.13em] text-blue-700">
+                  <p className="text-xs font-semibold uppercase tracking-[0.13em] text-indigo-800">
                     Understand this notice
                   </p>
                   <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
@@ -1469,7 +1469,7 @@ export default function ParserUploadPage() {
 
                       {detectedNotice.why_received && (
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-blue-700">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-indigo-800">
                             Why you likely got this
                           </p>
                           <p className="mt-2 text-[15px] leading-7 text-slate-700">{detectedNotice.why_received}</p>
@@ -1488,11 +1488,11 @@ export default function ParserUploadPage() {
                       )}
 
                       {detectedNotice.next_steps && (
-                        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-blue-700">
+                        <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-indigo-800">
                             What to do next
                           </p>
-                          <p className="mt-2 whitespace-pre-line text-[15px] leading-7 text-blue-900">
+                          <p className="mt-2 whitespace-pre-line text-[15px] leading-7 text-indigo-900">
                             {detectedNotice.next_steps}
                           </p>
                         </div>
@@ -1513,13 +1513,13 @@ export default function ParserUploadPage() {
                         type="button"
                         onClick={() => void handleSaveNotice()}
                         disabled={isSavingNotice || !parserJob.notice}
-                        className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {isSavingNotice ? "Saving..." : "Save to Safe"}
                       </button>
                       <Link
                         to={`/ca-help?notice=${encodeURIComponent(parserJob.notice_code || noticeCode || "")}`}
-                        className="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+                        className="inline-flex items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-800 transition hover:bg-indigo-100"
                       >
                         Talk to a CA
                       </Link>
@@ -1544,7 +1544,7 @@ export default function ParserUploadPage() {
                     <button
                       type="button"
                       onClick={() => void handleCopyBrief()}
-                      className="text-xs font-semibold text-blue-700 transition hover:text-blue-800"
+                      className="text-xs font-semibold text-indigo-800 transition hover:text-indigo-900"
                     >
                       Copy brief
                     </button>

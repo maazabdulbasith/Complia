@@ -1,4 +1,4 @@
-import { AdminPageIntro, EmptyState, PaymentStatusPill, SectionHeader, useSuperAdmin } from "./shared";
+﻿import { AdminPageIntro, EmptyState, PaymentStatusPill, SectionHeader, useSuperAdmin } from "./shared";
 
 export default function SuperAdminPaymentsPage() {
   const {
@@ -33,9 +33,9 @@ export default function SuperAdminPaymentsPage() {
       </SectionHeader>
 
       <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
-        <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
-          <p className="text-[11px] uppercase tracking-wide text-sky-700">Initiated</p>
-          <p className="text-2xl font-bold text-sky-900">{paymentStatusCounts.initiated}</p>
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
+          <p className="text-[11px] uppercase tracking-wide text-indigo-800">Initiated</p>
+          <p className="text-2xl font-bold text-indigo-900">{paymentStatusCounts.initiated}</p>
         </div>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
           <p className="text-[11px] uppercase tracking-wide text-amber-700">Abandoned</p>
@@ -58,7 +58,7 @@ export default function SuperAdminPaymentsPage() {
               <div>
                 <p className="font-semibold text-slate-900">{item.order_id}</p>
                 <p className="text-sm text-slate-500">
-                  {item.user_email || "Guest checkout"} · {item.plan_key} · ?{item.amount_inr}
+                  {item.user_email || "Guest checkout"} Â· {item.plan_key} Â· ?{item.amount_inr}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">Created {new Date(item.created_at).toLocaleString()}</p>
               </div>

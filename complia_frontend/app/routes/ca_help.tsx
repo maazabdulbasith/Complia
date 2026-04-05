@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 
@@ -88,10 +88,10 @@ export default function CAHelpPage() {
         <div className="mb-7 flex flex-wrap items-center justify-between gap-3">
           <BrandMark to="/" imageClassName="h-9 w-auto" />
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">CA support</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-800">CA support</p>
             <h1 className="font-display mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Request professional help</h1>
           </div>
-          <Link to="/" className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700">
+          <Link to="/" className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-800">
             Back to search
           </Link>
         </div>
@@ -103,13 +103,13 @@ export default function CAHelpPage() {
               Submit this form and Complia will route your case to one assigned CA so they can review your notice context and contact you with next steps.
             </p>
             {prefillNoticeCode && (
-              <p className="mt-2 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+              <p className="mt-2 inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-800">
                 Prefilled notice: {prefillNoticeCode}
               </p>
             )}
           </div>
 
-          <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/80 p-4">
+          <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/80 p-4">
             <p className="text-sm font-semibold text-slate-900">How this handoff works</p>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
               <li>Complia collects your request, notice code, and case context.</li>
@@ -126,7 +126,7 @@ export default function CAHelpPage() {
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                 placeholder="Your full name"
                 autoComplete="name"
               />
@@ -138,7 +138,7 @@ export default function CAHelpPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                 placeholder="you@example.com"
                 autoComplete="email"
               />
@@ -148,7 +148,7 @@ export default function CAHelpPage() {
               <input
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                 placeholder="9876543210"
                 autoComplete="tel"
               />
@@ -158,7 +158,7 @@ export default function CAHelpPage() {
               <input
                 value={noticeCode}
                 onChange={(e) => setNoticeCode(e.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                 placeholder="GST-DRC-01"
               />
             </div>
@@ -170,7 +170,7 @@ export default function CAHelpPage() {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               rows={5}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
               placeholder="Mention notice deadline, demand amount, and urgency."
             />
             <p className="mt-1 text-xs text-slate-500">Tip: include deadline date and claimed amount for faster triage.</p>
@@ -181,7 +181,7 @@ export default function CAHelpPage() {
               type="checkbox"
               checked={consentToShare}
               onChange={(e) => setConsentToShare(e.target.checked)}
-              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-200"
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-700 focus:ring-indigo-200"
             />
             <span className="text-sm leading-6 text-slate-700">
               I authorize Complia to share my name, contact details, notice code, message, and related case summary with one assigned CA for follow-up on this request.
@@ -199,7 +199,7 @@ export default function CAHelpPage() {
           <button
             type="submit"
             disabled={loading || !isFormValid}
-            className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:brightness-110 disabled:opacity-60"
+            className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#102a6b] to-[#163a86] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[#102a6b]/20 transition hover:brightness-110 disabled:opacity-60"
           >
             {loading ? "Submitting..." : "Submit request"}
           </button>
