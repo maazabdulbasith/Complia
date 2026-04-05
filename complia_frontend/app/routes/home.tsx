@@ -95,7 +95,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <div className="mx-auto flex min-h-16 w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:h-18 sm:flex-nowrap sm:gap-0 sm:px-5 sm:py-0">
           <BrandMark to="/" imageClassName="h-9 sm:h-10 w-auto" />
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
             <Link
               to="/contact-us"
               className="hidden rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800 sm:inline-flex"
@@ -164,7 +164,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600 sm:mt-5 sm:text-lg">
               Search by code, keyword, or section. Get plain-English explanation, severity, legal context, and next actions.
             </p>
-            <div className="mt-5 flex flex-wrap gap-2 sm:mt-6">
+            <div className="mt-5 grid gap-2 sm:mt-6 sm:flex sm:flex-wrap">
               <Link
                 to="/parser"
                 onClick={() =>
@@ -172,13 +172,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     source_path: "/",
                   })
                 }
-                className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 sm:px-5 sm:py-3"
+                className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 sm:w-auto sm:px-5 sm:py-3"
               >
                 Upload Notice & Understand
               </Link>
               <Link
                 to="/ca-help"
-                className="inline-flex items-center justify-center rounded-2xl border border-slate-300/80 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800 sm:px-5 sm:py-3"
+                className="inline-flex w-full items-center justify-center rounded-2xl border border-slate-300/80 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800 sm:w-auto sm:px-5 sm:py-3"
               >
                 Talk to a CA
               </Link>

@@ -1004,18 +1004,18 @@ export default function ParserUploadPage() {
       <div className="pointer-events-none absolute bottom-0 -left-20 h-80 w-80 rounded-full bg-indigo-300/20 blur-3xl" />
 
       <main className="relative z-10 mx-auto w-full max-w-6xl">
-        <div className="mb-6 flex flex-wrap items-center gap-3">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
           <BrandMark to="/" imageClassName="h-9 w-auto" className="shrink-0" />
-          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <div className="grid w-full grid-cols-1 gap-2 sm:ml-auto sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
             <Link
               to="/"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800"
             >
               <span aria-hidden>&larr;</span> Back to search
             </Link>
             <Link
               to="/saved"
-              className="inline-flex items-center rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800 sm:text-sm"
+              className="inline-flex items-center justify-center rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800 sm:text-sm"
             >
               Safe
             </Link>

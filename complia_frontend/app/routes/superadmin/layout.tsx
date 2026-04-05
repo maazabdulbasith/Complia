@@ -462,9 +462,9 @@ export default function SuperAdminLayout() {
                 ))}
               </div>
             </div>
-            <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-              <aside className="hidden xl:sticky xl:top-6 xl:block xl:self-start">
-                <nav className="rounded-2xl border border-white/60 bg-white/90 p-4 shadow-sm backdrop-blur xl:max-h-[calc(100vh-3rem)] xl:overflow-auto">
+            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+              <aside className="hidden lg:sticky lg:top-6 lg:block lg:self-start">
+                <nav className="rounded-2xl border border-white/60 bg-white/90 p-4 shadow-sm backdrop-blur lg:max-h-[calc(100vh-3rem)] lg:overflow-auto">
                   <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Sections</p>
                   <div className="space-y-1.5 text-sm font-semibold text-slate-700">
                     {sectionNavItems.map((item) => (
