@@ -455,6 +455,22 @@ function deriveMessageFromEnvelope(envelope: ApiErrorEnvelope | null, fallback: 
       return firstValue;
     }
   }
+
+  // DRF validation errors may come as top-level field keys:
+  // { "phone_number": ["Phone number must be 10 to 15 digits."] }
+  const reservedKeys = new Set(["status", "message", "detail", "code", "errors", "details"]);
+  for (const [key, value] of Object.entries(envelope)) {
+    if (reservedKeys.has(key)) {
+      continue;
+    }
+    if (Array.isArray(value) && value.length > 0) {
+      return String(value[0]);
+    }
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+
   return fallback;
 }
 
@@ -666,11 +682,26 @@ export async function updateSafeEntry(
 }
 
 export async function submitCAHelpRequest(payload: CAHelpRequestPayload): Promise<void> {
-  const response = await fetchWithAuth(`${API_BASE}/ca-help/`, {
+  // CA help endpoint is AllowAny. We try with auth first so logged-in users
+  // are linked; if token is stale, retry without auth instead of hard-failing.
+  const baseRequest = {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  };
+  const authHeaders = getAuthHeaders();
+
+  let response = await fetch(`${API_BASE}/ca-help/`, {
+    ...baseRequest,
+    headers: { "Content-Type": "application/json", ...authHeaders },
   });
+
+  if (response.status === 401) {
+    response = await fetch(`${API_BASE}/ca-help/`, {
+      ...baseRequest,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   if (!response.ok) {
     throw new Error(await getApiErrorMessage(response, "Failed to submit CA help request"));
   }

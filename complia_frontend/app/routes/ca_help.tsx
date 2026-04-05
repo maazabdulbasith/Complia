@@ -27,6 +27,7 @@ export default function CAHelpPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   useEffect(() => {
     const userJson = localStorage.getItem("user");
@@ -49,10 +50,29 @@ export default function CAHelpPage() {
 
   const isFormValid = name.trim().length > 1 && email.trim().length > 3 && consentToShare;
 
+  const validatePhone = (value: string): string | null => {
+    const cleaned = value.trim();
+    if (!cleaned) {
+      return null;
+    }
+    const normalized = cleaned.replace(/\s|-/g, "").replace(/^\+/, "");
+    if (!/^\d+$/.test(normalized) || normalized.length < 10 || normalized.length > 15) {
+      return "Phone number must be 10 to 15 digits.";
+    }
+    return null;
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isFormValid) {
       setError("Please complete your details and consent to CA handoff to continue.");
+      return;
+    }
+
+    const currentPhoneError = validatePhone(phoneNumber);
+    if (currentPhoneError) {
+      setPhoneError(currentPhoneError);
+      setError(currentPhoneError);
       return;
     }
 
@@ -74,9 +94,14 @@ export default function CAHelpPage() {
       setName("");
       setPhoneNumber("");
       setMessage("");
-    } catch {
+      setPhoneError(null);
+    } catch (submitError) {
       trackEvent("ca_help_submit_failed", { notice_code: noticeCode || "general" });
-      setError("Could not submit your request. Please try again.");
+      if (submitError instanceof Error && submitError.message) {
+        setError(submitError.message);
+      } else {
+        setError("Could not submit your request. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -85,7 +110,7 @@ export default function CAHelpPage() {
   return (
     <div className="grid-aurora min-h-screen overflow-x-hidden px-4 py-6 text-slate-900 sm:px-5 sm:py-8">
       <main className="mx-auto w-full max-w-3xl">
-        <div className="mb-7 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-7 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <BrandMark to="/" imageClassName="h-9 w-auto" />
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-800">CA support</p>
@@ -147,11 +172,18 @@ export default function CAHelpPage() {
               <label className="mb-1 block text-sm font-semibold text-slate-700">Phone (optional)</label>
               <input
                 value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setPhoneNumber(value);
+                  if (phoneError) {
+                    setPhoneError(validatePhone(value));
+                  }
+                }}
                 className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                 placeholder="9876543210"
                 autoComplete="tel"
               />
+              {phoneError && <p className="mt-1 text-xs font-medium text-rose-700">{phoneError}</p>}
             </div>
             <div>
               <label className="mb-1 block text-sm font-semibold text-slate-700">Notice code (optional)</label>

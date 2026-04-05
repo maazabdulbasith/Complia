@@ -92,7 +92,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       <div className="pointer-events-none absolute top-56 -left-24 h-80 w-80 rounded-full bg-indigo-300/25 blur-3xl animate-float [animation-delay:1200ms]" />
 
       <header className="sticky top-0 z-40 border-b border-white/60 bg-white/75 backdrop-blur-xl">
-        <div className="mx-auto flex min-h-16 w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:h-18 sm:flex-nowrap sm:gap-0 sm:px-5 sm:py-0">
+        <div className="mx-auto flex min-h-16 w-full max-w-6xl flex-col items-start gap-2 px-4 py-2 sm:h-18 sm:flex-row sm:flex-nowrap sm:items-center sm:justify-between sm:gap-0 sm:px-5 sm:py-0">
           <BrandMark to="/" imageClassName="h-9 sm:h-10 w-auto" />
 
           <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
