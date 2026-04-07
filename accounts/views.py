@@ -174,6 +174,44 @@ def _cashfree_headers() -> dict:
     }
 
 
+def _payment_provider_default() -> str:
+    provider = (getattr(settings, "PAYMENT_PROVIDER_DEFAULT", "cashfree") or "cashfree").strip().lower()
+    if provider not in {"cashfree", "razorpay"}:
+        return "cashfree"
+    return provider
+
+
+def _resolve_provider(requested_provider: str = "") -> str:
+    requested = (requested_provider or "").strip().lower()
+    if requested in {"cashfree", "razorpay"}:
+        return requested
+    return _payment_provider_default()
+
+
+def _razorpay_order_url() -> str:
+    return "https://api.razorpay.com/v1/orders"
+
+
+def _razorpay_checkout_config(plan) -> dict:
+    return {
+        "key_id": settings.RAZORPAY_KEY_ID,
+        "name": "Complia",
+        "description": plan.name,
+    }
+
+
+def _razorpay_signature_valid(raw_body: bytes, signature: str) -> bool:
+    if not settings.RAZORPAY_WEBHOOK_SECRET or not signature:
+        return False
+
+    generated = hmac.new(
+        settings.RAZORPAY_WEBHOOK_SECRET.encode("utf-8"),
+        raw_body,
+        hashlib.sha256,
+    ).hexdigest()
+    return constant_time_compare(generated, signature.strip())
+
+
 def _cashfree_signature_valid(raw_body: bytes, signature: str, timestamp: str = "") -> bool:
     if not settings.CASHFREE_WEBHOOK_SECRET:
         return False
@@ -486,6 +524,7 @@ class PaymentOrderCreateView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         plan_key = serializer.validated_data["plan_key"]
+        provider = _resolve_provider(serializer.validated_data.get("provider", ""))
 
         plan = PaymentPlan.objects.filter(key=plan_key, is_active=True).first()
         if not plan:
@@ -499,49 +538,165 @@ class PaymentOrderCreateView(generics.GenericAPIView):
             )
 
         order_id = f"cmp-{uuid.uuid4().hex[:24]}"
-        amount_inr = round(plan.amount_paise / 100.0, 2)
-        customer_phone = (request.user.phone_number or "").strip() or "9999999999"
-        return_url = getattr(settings, "CASHFREE_RETURN_URL", "").strip()
-        if not return_url:
-            return_url = f"{getattr(settings, 'PUBLIC_SITE_URL', '').rstrip('/')}/parser"
-
-        payload = {
-            "order_id": order_id,
-            "order_amount": amount_inr,
-            "order_currency": plan.currency,
-            "customer_details": {
-                "customer_id": str(request.user.id),
-                "customer_email": request.user.email,
-                "customer_phone": customer_phone,
-            },
-            "order_meta": {
-                "return_url": f"{return_url}?order_id={order_id}",
-            },
-            "order_note": f"Complia {plan.key}",
-        }
-
         payment_order = PaymentOrder.objects.create(
             user=request.user,
             plan=plan,
             order_id=order_id,
-            provider="cashfree",
+            provider=provider,
             amount_paise=plan.amount_paise,
             currency=plan.currency,
             credits=plan.credits,
             status="created",
-            metadata={"request_payload": payload},
+            metadata={},
         )
 
-        credentials_ready = bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY)
+        if provider == "cashfree":
+            amount_inr = round(plan.amount_paise / 100.0, 2)
+            customer_phone = (request.user.phone_number or "").strip() or "9999999999"
+            return_url = getattr(settings, "CASHFREE_RETURN_URL", "").strip()
+            if not return_url:
+                return_url = f"{getattr(settings, 'PUBLIC_SITE_URL', '').rstrip('/')}/parser"
+
+            payload = {
+                "order_id": order_id,
+                "order_amount": amount_inr,
+                "order_currency": plan.currency,
+                "customer_details": {
+                    "customer_id": str(request.user.id),
+                    "customer_email": request.user.email,
+                    "customer_phone": customer_phone,
+                },
+                "order_meta": {
+                    "return_url": f"{return_url}?order_id={order_id}",
+                },
+                "order_note": f"Complia {plan.key}",
+            }
+
+            credentials_ready = bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY)
+            if not credentials_ready and settings.DEBUG:
+                payment_order.status = "payment_pending"
+                payment_order.payment_session_id = f"sandbox_session_{payment_order.order_id}"
+                payment_order.provider_order_id = payment_order.order_id
+                payment_order.metadata = {"request_payload": payload, "provider": "cashfree"}
+                payment_order.save(
+                    update_fields=[
+                        "status",
+                        "payment_session_id",
+                        "provider_order_id",
+                        "metadata",
+                        "updated_at",
+                    ]
+                )
+                return Response(PaymentOrderSerializer(payment_order).data, status=status.HTTP_201_CREATED)
+            if not credentials_ready:
+                payment_order.status = "failed"
+                payment_order.failure_reason = "Cashfree credentials are not configured."
+                payment_order.save(update_fields=["status", "failure_reason", "updated_at"])
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Payment provider is not configured.",
+                        "code": "payment_provider_not_configured",
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+            try:
+                cf_response = requests.post(
+                    _cashfree_base_url(),
+                    headers=_cashfree_headers(),
+                    data=json.dumps(payload),
+                    timeout=15,
+                )
+            except requests.RequestException:
+                payment_order.status = "failed"
+                payment_order.failure_reason = "Could not connect to Cashfree."
+                payment_order.save(update_fields=["status", "failure_reason", "updated_at"])
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Could not create payment order.",
+                        "code": "payment_provider_unavailable",
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+            if cf_response.status_code not in {200, 201}:
+                payment_order.status = "failed"
+                payment_order.failure_reason = f"Cashfree order creation failed ({cf_response.status_code})."
+                payment_order.save(update_fields=["status", "failure_reason", "updated_at"])
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Payment provider rejected the request.",
+                        "code": "payment_provider_error",
+                    },
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+            try:
+                response_data = cf_response.json()
+            except ValueError:
+                payment_order.status = "failed"
+                payment_order.failure_reason = "Cashfree returned an invalid JSON response."
+                payment_order.save(update_fields=["status", "failure_reason", "updated_at"])
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Payment provider returned an invalid response.",
+                        "code": "payment_provider_invalid_response",
+                    },
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+            payment_order.provider_order_id = response_data.get("order_id", "")
+            payment_order.payment_session_id = response_data.get("payment_session_id", "")
+            payment_order.checkout_url = response_data.get("order_meta", {}).get("payment_link", "")
+            payment_order.status = "payment_pending"
+            payment_order.metadata = {
+                "provider": "cashfree",
+                "request_payload": payload,
+                "cashfree_response": response_data,
+            }
+            payment_order.save(
+                update_fields=[
+                    "provider_order_id",
+                    "payment_session_id",
+                    "checkout_url",
+                    "status",
+                    "metadata",
+                    "updated_at",
+                ]
+            )
+            return Response(PaymentOrderSerializer(payment_order).data, status=status.HTTP_201_CREATED)
+
+        payload = {
+            "amount": int(plan.amount_paise),
+            "currency": plan.currency,
+            "receipt": order_id[:40],
+            "notes": {
+                "complia_order_id": order_id,
+                "plan_key": plan.key,
+                "user_id": str(request.user.id),
+                "user_email": request.user.email,
+            },
+        }
+
+        credentials_ready = bool(settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
         if not credentials_ready and settings.DEBUG:
             payment_order.status = "payment_pending"
-            payment_order.payment_session_id = f"sandbox_session_{payment_order.order_id}"
-            payment_order.provider_order_id = payment_order.order_id
-            payment_order.save(update_fields=["status", "payment_session_id", "provider_order_id", "updated_at"])
+            payment_order.provider_order_id = f"order_sandbox_{payment_order.order_id}"
+            payment_order.metadata = {
+                "provider": "razorpay",
+                "request_payload": payload,
+                "checkout": _razorpay_checkout_config(plan),
+            }
+            payment_order.save(
+                update_fields=["status", "provider_order_id", "metadata", "updated_at"]
+            )
             return Response(PaymentOrderSerializer(payment_order).data, status=status.HTTP_201_CREATED)
         if not credentials_ready:
             payment_order.status = "failed"
-            payment_order.failure_reason = "Cashfree credentials are not configured."
+            payment_order.failure_reason = "Razorpay credentials are not configured."
             payment_order.save(update_fields=["status", "failure_reason", "updated_at"])
             return Response(
                 {
@@ -553,15 +708,15 @@ class PaymentOrderCreateView(generics.GenericAPIView):
             )
 
         try:
-            cf_response = requests.post(
-                _cashfree_base_url(),
-                headers=_cashfree_headers(),
-                data=json.dumps(payload),
+            rzp_response = requests.post(
+                _razorpay_order_url(),
+                auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET),
+                json=payload,
                 timeout=15,
             )
         except requests.RequestException:
             payment_order.status = "failed"
-            payment_order.failure_reason = "Could not connect to Cashfree."
+            payment_order.failure_reason = "Could not connect to Razorpay."
             payment_order.save(update_fields=["status", "failure_reason", "updated_at"])
             return Response(
                 {
@@ -572,9 +727,9 @@ class PaymentOrderCreateView(generics.GenericAPIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        if cf_response.status_code not in {200, 201}:
+        if rzp_response.status_code not in {200, 201}:
             payment_order.status = "failed"
-            payment_order.failure_reason = f"Cashfree order creation failed ({cf_response.status_code})."
+            payment_order.failure_reason = f"Razorpay order creation failed ({rzp_response.status_code})."
             payment_order.save(update_fields=["status", "failure_reason", "updated_at"])
             return Response(
                 {
@@ -586,10 +741,10 @@ class PaymentOrderCreateView(generics.GenericAPIView):
             )
 
         try:
-            response_data = cf_response.json()
+            response_data = rzp_response.json()
         except ValueError:
             payment_order.status = "failed"
-            payment_order.failure_reason = "Cashfree returned an invalid JSON response."
+            payment_order.failure_reason = "Razorpay returned an invalid JSON response."
             payment_order.save(update_fields=["status", "failure_reason", "updated_at"])
             return Response(
                 {
@@ -599,23 +754,17 @@ class PaymentOrderCreateView(generics.GenericAPIView):
                 },
                 status=status.HTTP_502_BAD_GATEWAY,
             )
-        payment_order.provider_order_id = response_data.get("order_id", "")
-        payment_order.payment_session_id = response_data.get("payment_session_id", "")
-        payment_order.checkout_url = response_data.get("order_meta", {}).get("payment_link", "")
+
+        payment_order.provider_order_id = response_data.get("id", "")
         payment_order.status = "payment_pending"
         payment_order.metadata = {
+            "provider": "razorpay",
             "request_payload": payload,
-            "cashfree_response": response_data,
+            "razorpay_response": response_data,
+            "checkout": _razorpay_checkout_config(plan),
         }
         payment_order.save(
-            update_fields=[
-                "provider_order_id",
-                "payment_session_id",
-                "checkout_url",
-                "status",
-                "metadata",
-                "updated_at",
-            ]
+            update_fields=["provider_order_id", "status", "metadata", "updated_at"]
         )
         return Response(PaymentOrderSerializer(payment_order).data, status=status.HTTP_201_CREATED)
 
@@ -839,6 +988,112 @@ class CashfreeWebhookView(generics.GenericAPIView):
                 session_id=f"pay-{payment_order.order_id}",
                 event_name="payment_failed",
                 path="/payments/webhook",
+                metadata={"order_id": payment_order.order_id, "plan_key": payment_order.plan.key},
+            )
+        else:
+            payment_order.status = "payment_pending"
+            payment_order.save(update_fields=["status", "updated_at"])
+
+        transaction_row.processed_at = timezone.now()
+        transaction_row.save(update_fields=["processed_at"])
+        return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+
+class RazorpayWebhookView(generics.GenericAPIView):
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "analytics_event"
+
+    def post(self, request):
+        signature = (request.headers.get("x-razorpay-signature") or "").strip()
+        raw_body = request.body or b""
+
+        if not _razorpay_signature_valid(raw_body, signature):
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Invalid webhook signature.",
+                    "code": "invalid_signature",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payload = request.data or {}
+        event_name = (payload.get("event") or "").strip()
+        body_payload = payload.get("payload", {}) if isinstance(payload, dict) else {}
+
+        payment_entity = (body_payload.get("payment", {}) or {}).get("entity", {})
+        order_entity = (body_payload.get("order", {}) or {}).get("entity", {})
+
+        provider_order_id = (
+            payment_entity.get("order_id")
+            or order_entity.get("id")
+            or ""
+        ).strip()
+        provider_payment_id = (payment_entity.get("id") or "").strip()
+        provider_status = (
+            payment_entity.get("status")
+            or order_entity.get("status")
+            or event_name
+            or ""
+        ).strip()
+
+        if not provider_order_id:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Missing order reference.",
+                    "code": "missing_order_id",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payment_order = PaymentOrder.objects.filter(
+            Q(provider_order_id=provider_order_id) | Q(order_id=provider_order_id)
+        ).first()
+        if not payment_order:
+            return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+        success_event = event_name in {"payment.captured", "order.paid", "payment.authorized"}
+        failed_event = event_name in {"payment.failed"}
+        if success_event and provider_status.lower() not in {"captured", "paid", "completed"}:
+            provider_status = "CAPTURED"
+        elif failed_event:
+            provider_status = payment_entity.get("error_reason") or "FAILED"
+
+        idempotency_key = f"rzp:{provider_order_id}:{provider_payment_id or 'no-payment-id'}:{event_name or provider_status or 'unknown'}"
+        transaction_row, created = PaymentTransaction.objects.get_or_create(
+            idempotency_key=idempotency_key,
+            defaults={
+                "payment_order": payment_order,
+                "provider_payment_id": provider_payment_id,
+                "provider_status": provider_status,
+                "signature_verified": True,
+                "payload": payload,
+                "processed_at": timezone.now(),
+            },
+        )
+        if not created:
+            return Response({"status": "ok", "duplicate": True}, status=status.HTTP_200_OK)
+
+        if is_success_status(provider_status) or success_event:
+            grant_parser_credits_once(payment_order)
+            AnalyticsEvent.objects.create(
+                user=payment_order.user,
+                session_id=f"pay-{payment_order.order_id}",
+                event_name="payment_success",
+                path="/payments/webhook/razorpay",
+                metadata={"order_id": payment_order.order_id, "plan_key": payment_order.plan.key},
+            )
+        elif is_failure_status(provider_status) or failed_event:
+            payment_order.status = "failed"
+            payment_order.failure_reason = provider_status or "Payment failed"
+            payment_order.save(update_fields=["status", "failure_reason", "updated_at"])
+            AnalyticsEvent.objects.create(
+                user=payment_order.user,
+                session_id=f"pay-{payment_order.order_id}",
+                event_name="payment_failed",
+                path="/payments/webhook/razorpay",
                 metadata={"order_id": payment_order.order_id, "plan_key": payment_order.plan.key},
             )
         else:
