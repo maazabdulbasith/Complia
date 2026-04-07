@@ -15,6 +15,7 @@ import {
 } from "../api/client";
 import BrandMark from "../lib/brand_mark";
 import { getAnalyticsSessionId, trackEvent } from "../lib/analytics";
+import { DEFAULT_OG_IMAGE_URL, absoluteSiteUrl } from "../lib/seo";
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const notice = await getNotice(params.id);
@@ -36,11 +37,13 @@ export function meta({ data }: Route.MetaArgs) {
     { property: "og:title", content: notice.meta_title || `${notice.code} - ${notice.title}` },
     { property: "og:description", content: notice.meta_description || notice.summary },
     { property: "og:type", content: "article" },
-    { property: "og:url", content: `https://complia.in/notice/${notice.code}` },
+    { property: "og:url", content: absoluteSiteUrl(`/notice/${notice.code}`) },
+    { property: "og:image", content: DEFAULT_OG_IMAGE_URL },
     { property: "article:modified_time", content: notice.updated_at },
     { name: "twitter:card", content: "summary_large_image" },
     { name: "twitter:title", content: notice.meta_title || `${notice.code} - ${notice.title}` },
     { name: "twitter:description", content: notice.meta_description || notice.summary },
+    { name: "twitter:image", content: DEFAULT_OG_IMAGE_URL },
   ];
 }
 

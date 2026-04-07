@@ -10,6 +10,7 @@
 import type { Route } from "./+types/root";
 import "./app.css";
 import { trackEvent } from "./lib/analytics";
+import { DEFAULT_OG_IMAGE_URL, SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "./lib/seo";
 
 export const links: Route.LinksFunction = () => [
   { rel: "icon", href: "/brand/complia-logo-icon.png", type: "image/png" },
@@ -25,6 +26,20 @@ export const links: Route.LinksFunction = () => [
     href: "https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap",
   },
 ];
+
+export function meta({}: Route.MetaArgs) {
+  return [
+    { title: `${SITE_NAME} | Tax Notices Simplified` },
+    { name: "description", content: SITE_DESCRIPTION },
+    { property: "og:site_name", content: SITE_NAME },
+    { property: "og:type", content: "website" },
+    { property: "og:url", content: SITE_URL },
+    { property: "og:image", content: DEFAULT_OG_IMAGE_URL },
+    { property: "og:image:alt", content: "Complia logo" },
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "twitter:image", content: DEFAULT_OG_IMAGE_URL },
+  ];
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (

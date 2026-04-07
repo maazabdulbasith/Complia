@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 
 import BrandMark from "../lib/brand_mark";
-import { SEO_FAQS, SITE_DESCRIPTION } from "../lib/seo";
+import { absoluteSiteUrl, DEFAULT_OG_IMAGE_URL, SEO_FAQS, SITE_DESCRIPTION } from "../lib/seo";
 import type { Route } from "./+types/faq";
 
 export function meta({}: Route.MetaArgs) {
@@ -17,8 +17,11 @@ export function meta({}: Route.MetaArgs) {
       property: "og:description",
       content: "Answers to common questions about tax notices, urgency, parser uploads, and CA escalation.",
     },
+    { property: "og:url", content: absoluteSiteUrl("/faq") },
     { property: "og:type", content: "website" },
+    { property: "og:image", content: DEFAULT_OG_IMAGE_URL },
     { name: "twitter:card", content: "summary_large_image" },
+    { name: "twitter:image", content: DEFAULT_OG_IMAGE_URL },
   ];
 }
 

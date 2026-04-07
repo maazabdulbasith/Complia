@@ -4,6 +4,18 @@
   "framework": null,
   "rewrites": [
     {
+      "source": "/sitemap.xml",
+      "destination": "https://complia-mzrq.onrender.com/sitemap.xml"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "https://complia-mzrq.onrender.com/robots.txt"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://complia-mzrq.onrender.com/api/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

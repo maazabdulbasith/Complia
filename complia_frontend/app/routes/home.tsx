@@ -4,22 +4,32 @@ import { Form, Link, useNavigation, useNavigate } from "react-router";
 import { searchNotices } from "../api/client";
 import { trackEvent } from "../lib/analytics";
 import BrandMark from "../lib/brand_mark";
-import { FEATURED_NOTICE_LINKS, SEO_FAQS, SITE_DESCRIPTION, SITE_NAME } from "../lib/seo";
+import {
+  absoluteSiteUrl,
+  DEFAULT_OG_IMAGE_URL,
+  FEATURED_NOTICE_LINKS,
+  SEO_FAQS,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+} from "../lib/seo";
 import type { Route } from "./+types/home";
 
 export function meta({}: Route.MetaArgs) {
   return [
     { title: "Complia | Understand GST and Income Tax Notices Fast" },
     { name: "description", content: SITE_DESCRIPTION },
+    { property: "og:url", content: absoluteSiteUrl("/") },
     { property: "og:title", content: "Complia | Understand GST and Income Tax Notices Fast" },
     { property: "og:description", content: SITE_DESCRIPTION },
     { property: "og:type", content: "website" },
+    { property: "og:image", content: DEFAULT_OG_IMAGE_URL },
     { name: "twitter:card", content: "summary_large_image" },
     {
       name: "twitter:title",
       content: "Complia | Understand GST and Income Tax Notices Fast",
     },
     { name: "twitter:description", content: SITE_DESCRIPTION },
+    { name: "twitter:image", content: DEFAULT_OG_IMAGE_URL },
   ];
 }
 
