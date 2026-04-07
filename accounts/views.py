@@ -15,7 +15,7 @@ from django.utils import timezone
 from django.utils.crypto import constant_time_compare
 from rest_framework import filters, generics, mixins, permissions, status, viewsets
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.throttling import ScopedRateThrottle as DRFScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -35,6 +35,7 @@ from .models import (
 )
 from .permissions import IsSuperAdmin
 from .payment_ops import grant_parser_credits_once, is_failure_status, is_order_credit_eligible, is_success_status
+from .throttles import CompliaScopedRateThrottle
 from .serializers import (
     AdminAssistedIntentSerializer,
     AdminCAHelpRequestSerializer,
@@ -53,6 +54,8 @@ from .serializers import (
     UserEntitlementSerializer,
     WeeklyKpiSnapshotSerializer,
 )
+
+ScopedRateThrottle = CompliaScopedRateThrottle or DRFScopedRateThrottle
 
 
 def _window_to_start(window: str) -> timezone.datetime:

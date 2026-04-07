@@ -10,11 +10,12 @@ from django.utils import timezone
 from rest_framework import filters, generics, mixins, permissions, serializers, status, viewsets
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle, UserRateThrottle
+from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle as DRFScopedRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 
 from accounts.models import AnalyticsEvent, UserEntitlement
 from accounts.permissions import IsParserBetaUser, IsSuperAdmin
+from accounts.throttles import CompliaScopedRateThrottle
 from .models import NoticeFeedback, NoticeType, ParserBenchmarkRun, ParserExtraction, ParserJob, SavedNotice
 from .ocr_utils import OCRProcessingError, extract_text_from_binary_document, sanitize_ocr_text
 from .parser_utils import NonNoticeDocumentError, analyze_notice_likelihood, parse_notice_document
@@ -29,6 +30,8 @@ from .serializers import (
     ParserUploadSerializer,
     SavedNoticeSerializer,
 )
+
+ScopedRateThrottle = CompliaScopedRateThrottle or DRFScopedRateThrottle
 
 class NoticeTypeViewSet(viewsets.ReadOnlyModelViewSet):
     """
