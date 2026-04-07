@@ -388,6 +388,7 @@ class PaymentPlanSerializer(serializers.ModelSerializer):
 
 class PaymentOrderCreateSerializer(serializers.Serializer):
     plan_key = serializers.CharField(max_length=80)
+    provider = serializers.CharField(max_length=40, required=False, allow_blank=True)
 
     def validate_plan_key(self, value):
         cleaned = value.strip()
@@ -395,6 +396,14 @@ class PaymentOrderCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Plan key is required.")
         if not PaymentPlan.objects.filter(key=cleaned, is_active=True).exists():
             raise serializers.ValidationError("Invalid plan key.")
+        return cleaned
+
+    def validate_provider(self, value):
+        cleaned = (value or "").strip().lower()
+        if not cleaned:
+            return cleaned
+        if cleaned not in {"cashfree", "razorpay"}:
+            raise serializers.ValidationError("Unsupported payment provider.")
         return cleaned
 
 
@@ -420,6 +429,7 @@ class PaymentTestConfirmSerializer(serializers.Serializer):
 class PaymentOrderSerializer(serializers.ModelSerializer):
     plan_key = serializers.CharField(source="plan.key", read_only=True)
     amount_inr = serializers.SerializerMethodField()
+    checkout_config = serializers.SerializerMethodField()
 
     class Meta:
         model = PaymentOrder
@@ -436,6 +446,7 @@ class PaymentOrderSerializer(serializers.ModelSerializer):
             "provider_order_id",
             "payment_session_id",
             "checkout_url",
+            "checkout_config",
             "paid_at",
             "created_at",
             "updated_at",
@@ -444,6 +455,13 @@ class PaymentOrderSerializer(serializers.ModelSerializer):
 
     def get_amount_inr(self, obj):
         return float(obj.amount_paise) / 100.0
+
+    def get_checkout_config(self, obj):
+        metadata = obj.metadata or {}
+        checkout = metadata.get("checkout", {})
+        if not isinstance(checkout, dict):
+            return {}
+        return checkout
 
 
 class AdminPaymentOrderSerializer(serializers.ModelSerializer):
@@ -504,4 +522,3 @@ class UserEntitlementSerializer(serializers.ModelSerializer):
             "lifetime_consumed_credits",
             "updated_at",
         ]
-

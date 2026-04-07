@@ -322,6 +322,7 @@ export type PaymentOrder = {
   provider_order_id: string;
   payment_session_id: string;
   checkout_url: string;
+  checkout_config?: Record<string, unknown>;
   paid_at: string | null;
   created_at: string;
   updated_at: string;
@@ -776,11 +777,11 @@ export async function getPaymentPlans(): Promise<PaymentPlan[]> {
   return response.json();
 }
 
-export async function createPaymentOrder(planKey: string): Promise<PaymentOrder> {
+export async function createPaymentOrder(planKey: string, provider?: "cashfree" | "razorpay"): Promise<PaymentOrder> {
   const response = await fetchWithAuth(`${API_BASE}/payments/orders/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ plan_key: planKey }),
+    body: JSON.stringify({ plan_key: planKey, ...(provider ? { provider } : {}) }),
   });
   if (!response.ok) {
     throw await buildApiClientError(response, "Failed to create payment order");

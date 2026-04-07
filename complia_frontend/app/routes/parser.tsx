@@ -36,6 +36,36 @@ type CashfreeInstance = {
   checkout: (options: CashfreeCheckoutOptions) => Promise<CashfreeCheckoutResult>;
 };
 
+type RazorpayCheckoutHandlerResponse = {
+  razorpay_payment_id?: string;
+  razorpay_order_id?: string;
+  razorpay_signature?: string;
+};
+
+type RazorpayCheckoutOptions = {
+  key: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description?: string;
+  order_id: string;
+  prefill?: {
+    name?: string;
+    email?: string;
+    contact?: string;
+  };
+  notes?: Record<string, string>;
+  modal?: {
+    ondismiss?: () => void;
+  };
+  handler?: (response: RazorpayCheckoutHandlerResponse) => void;
+};
+
+type RazorpayInstance = {
+  open: () => void;
+  on: (eventName: "payment.failed", callback: (response: { error?: { description?: string } }) => void) => void;
+};
+
 type PendingUploadDraft = {
   file: File;
   noticeCode: string | null;
@@ -44,10 +74,12 @@ type PendingUploadDraft = {
 declare global {
   interface Window {
     Cashfree?: (config: { mode: "sandbox" | "production" }) => CashfreeInstance;
+    Razorpay?: new (options: RazorpayCheckoutOptions) => RazorpayInstance;
   }
 }
 
 let cashfreeSdkPromise: Promise<void> | null = null;
+let razorpaySdkPromise: Promise<void> | null = null;
 const ENABLE_TEST_PAYMENT = String(import.meta.env.VITE_ENABLE_TEST_PAYMENT || "").toLowerCase() === "true";
 
 function loadCashfreeSdk(): Promise<void> {
@@ -70,6 +102,28 @@ function loadCashfreeSdk(): Promise<void> {
     document.body.appendChild(script);
   });
   return cashfreeSdkPromise;
+}
+
+function loadRazorpaySdk(): Promise<void> {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Razorpay checkout is only available in browser."));
+  }
+  if (window.Razorpay) {
+    return Promise.resolve();
+  }
+  if (razorpaySdkPromise) {
+    return razorpaySdkPromise;
+  }
+
+  razorpaySdkPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Could not load Razorpay checkout SDK."));
+    document.body.appendChild(script);
+  });
+  return razorpaySdkPromise;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -767,46 +821,138 @@ export default function ParserUploadPage() {
     setErrorMessage(null);
     setStatusMessage("Creating secure payment order...");
     try {
-      const order = await createPaymentOrder(selectedPlanKey);
+      const preferredProviderEnv = String(import.meta.env.VITE_PAYMENT_PROVIDER || "").trim().toLowerCase();
+      const preferredProvider =
+        preferredProviderEnv === "razorpay" || preferredProviderEnv === "cashfree"
+          ? (preferredProviderEnv as "cashfree" | "razorpay")
+          : undefined;
+
+      const order = await createPaymentOrder(selectedPlanKey, preferredProvider);
       trackEvent("payment_order_created", {
         plan_key: order.plan_key,
         amount_paise: order.amount_paise,
         currency: order.currency,
+        provider: order.provider,
         source_path: "/parser",
       });
 
-      if (!order.payment_session_id) {
-        throw new Error("Payment session missing. Please retry.");
-      }
+      if (order.provider === "razorpay") {
+        const checkoutConfig = (order.checkout_config || {}) as Record<string, unknown>;
+        const keyId =
+          (typeof checkoutConfig.key_id === "string" ? checkoutConfig.key_id : "") ||
+          String(import.meta.env.VITE_RAZORPAY_KEY_ID || "").trim();
+        const displayName =
+          (typeof checkoutConfig.name === "string" ? checkoutConfig.name : "") || "Complia";
+        const description =
+          (typeof checkoutConfig.description === "string" ? checkoutConfig.description : "") ||
+          (selectedPlan?.name || "Single Notice Parse");
+        const userRaw = localStorage.getItem("user");
+        let userEmail = "";
+        let userName = "";
+        if (userRaw) {
+          try {
+            const parsed = JSON.parse(userRaw) as { email?: string; first_name?: string; last_name?: string };
+            userEmail = parsed.email || "";
+            userName = `${parsed.first_name || ""} ${parsed.last_name || ""}`.trim();
+          } catch {
+            userEmail = "";
+            userName = "";
+          }
+        }
 
-      await loadCashfreeSdk();
-      if (!window.Cashfree) {
-        throw new Error("Cashfree checkout is unavailable right now.");
-      }
+        if (!keyId) {
+          throw new Error("Razorpay key is missing. Configure VITE_RAZORPAY_KEY_ID or backend checkout config.");
+        }
+        if (!order.provider_order_id) {
+          throw new Error("Razorpay order reference missing. Please retry.");
+        }
 
-      const mode = import.meta.env.VITE_CASHFREE_ENV === "production" ? "production" : "sandbox";
-      const cashfree = window.Cashfree({ mode });
-      trackEvent("payment_checkout_opened", {
-        plan_key: order.plan_key,
-        amount_paise: order.amount_paise,
-        currency: order.currency,
-        source_path: "/parser",
-      });
+        await loadRazorpaySdk();
+        const RazorpayCtor = window.Razorpay;
+        if (!RazorpayCtor) {
+          throw new Error("Razorpay checkout is unavailable right now.");
+        }
 
-      const checkoutResult = await cashfree.checkout({
-        paymentSessionId: order.payment_session_id,
-        redirectTarget: "_modal",
-      });
-
-      if (checkoutResult?.error) {
-        const message = checkoutResult.error.message || "Payment was not completed.";
-        trackEvent("payment_failed", {
+        trackEvent("payment_checkout_opened", {
           plan_key: order.plan_key,
           amount_paise: order.amount_paise,
           currency: order.currency,
+          provider: order.provider,
           source_path: "/parser",
         });
-        throw new Error(message);
+
+        const checkoutOutcome = await new Promise<"success" | "dismissed" | "failed">((resolve) => {
+          const razorpay = new RazorpayCtor({
+            key: keyId,
+            amount: order.amount_paise,
+            currency: order.currency,
+            name: displayName,
+            description,
+            order_id: order.provider_order_id,
+            prefill: {
+              name: userName || undefined,
+              email: userEmail || undefined,
+            },
+            notes: {
+              complia_order_id: order.order_id,
+              plan_key: order.plan_key,
+            },
+            handler: () => resolve("success"),
+            modal: {
+              ondismiss: () => resolve("dismissed"),
+            },
+          });
+
+          razorpay.on("payment.failed", () => resolve("failed"));
+          razorpay.open();
+        });
+
+        if (checkoutOutcome !== "success") {
+          trackEvent("payment_failed", {
+            plan_key: order.plan_key,
+            amount_paise: order.amount_paise,
+            currency: order.currency,
+            provider: order.provider,
+            source_path: "/parser",
+          });
+          throw new Error("Payment was not completed.");
+        }
+      } else {
+        if (!order.payment_session_id) {
+          throw new Error("Payment session missing. Please retry.");
+        }
+
+        await loadCashfreeSdk();
+        if (!window.Cashfree) {
+          throw new Error("Cashfree checkout is unavailable right now.");
+        }
+
+        const mode = import.meta.env.VITE_CASHFREE_ENV === "production" ? "production" : "sandbox";
+        const cashfree = window.Cashfree({ mode });
+        trackEvent("payment_checkout_opened", {
+          plan_key: order.plan_key,
+          amount_paise: order.amount_paise,
+          currency: order.currency,
+          provider: order.provider,
+          source_path: "/parser",
+        });
+
+        const checkoutResult = await cashfree.checkout({
+          paymentSessionId: order.payment_session_id,
+          redirectTarget: "_modal",
+        });
+
+        if (checkoutResult?.error) {
+          const message = checkoutResult.error.message || "Payment was not completed.";
+          trackEvent("payment_failed", {
+            plan_key: order.plan_key,
+            amount_paise: order.amount_paise,
+            currency: order.currency,
+            provider: order.provider,
+            source_path: "/parser",
+          });
+          throw new Error(message);
+        }
       }
 
       setStatusMessage("Payment complete. Verifying and unlocking parser...");
@@ -1251,7 +1397,7 @@ export default function ParserUploadPage() {
                     </p>
                     <ol className="mt-3 space-y-2">
                       <li>1. Upload your notice file.</li>
-                      <li>2. Complete secure Cashfree checkout.</li>
+                      <li>2. Complete secure checkout.</li>
                       <li>3. Result unlocks with extracted fields, risk checklist, and CA handoff brief.</li>
                     </ol>
                     <Link

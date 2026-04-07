@@ -59,6 +59,10 @@ CASHFREE_SECRET_KEY = os.getenv("CASHFREE_SECRET_KEY", "").strip()
 CASHFREE_ENV = os.getenv("CASHFREE_ENV", "sandbox").strip().lower()
 CASHFREE_WEBHOOK_SECRET = os.getenv("CASHFREE_WEBHOOK_SECRET", "").strip()
 CASHFREE_RETURN_URL = os.getenv("CASHFREE_RETURN_URL", "").strip()
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "").strip()
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "").strip()
+RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "").strip()
+PAYMENT_PROVIDER_DEFAULT = os.getenv("PAYMENT_PROVIDER_DEFAULT", "cashfree").strip().lower()
 TEST_PAYMENT_API_ENABLED = os.getenv("TEST_PAYMENT_API_ENABLED", "false").lower() in ("true", "1", "yes")
 
 

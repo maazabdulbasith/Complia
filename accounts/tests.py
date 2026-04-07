@@ -456,6 +456,7 @@ class AssistedIntentAndExperimentTests(APITestCase):
         self.assertEqual(response.data["offer"]["key"], "assisted_response_pack_v1")
 
 
+@override_settings(PAYMENT_PROVIDER_DEFAULT="cashfree")
 class PaymentsPhase3ATests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="payer@complia.in", password="pass123456")
@@ -513,6 +514,77 @@ class PaymentsPhase3ATests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["status"], "payment_pending")
         self.assertEqual(response.data["payment_session_id"], "session_123")
+        self.assertEqual(response.data["provider"], "cashfree")
+
+    @override_settings(
+        PAYMENT_PROVIDER_DEFAULT="razorpay",
+        RAZORPAY_KEY_ID="rzp_test_key",
+        RAZORPAY_KEY_SECRET="rzp_test_secret",
+    )
+    @patch("accounts.views.requests.post")
+    def test_create_payment_order_success_razorpay(self, mock_post):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "id": "order_test_123",
+            "amount": 900,
+            "currency": "INR",
+            "status": "created",
+        }
+        mock_post.return_value = mock_response
+
+        response = self.client.post(
+            "/api/v1/payments/orders/",
+            {"plan_key": "single_use_notice_parse"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["status"], "payment_pending")
+        self.assertEqual(response.data["provider"], "razorpay")
+        self.assertEqual(response.data["provider_order_id"], "order_test_123")
+        self.assertIn("checkout_config", response.data)
+
+    @override_settings(RAZORPAY_WEBHOOK_SECRET="rzp_whsec_test")
+    def test_razorpay_webhook_success_grants_credit(self):
+        payment_order = PaymentOrder.objects.create(
+            user=self.user,
+            plan=self.plan,
+            order_id="cmp-rzp-webhook-001",
+            provider="razorpay",
+            provider_order_id="order_test_abc123",
+            amount_paise=900,
+            currency="INR",
+            credits=1,
+            status="payment_pending",
+        )
+        payload = {
+            "event": "payment.captured",
+            "payload": {
+                "payment": {
+                    "entity": {
+                        "id": "pay_test_001",
+                        "order_id": payment_order.provider_order_id,
+                        "status": "captured",
+                    }
+                }
+            },
+        }
+        payload_json = json.dumps(payload)
+        signature = hmac.new(
+            b"rzp_whsec_test",
+            payload_json.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        response = self.client.post(
+            "/api/v1/payments/webhooks/razorpay/",
+            data=payload_json,
+            content_type="application/json",
+            HTTP_X_RAZORPAY_SIGNATURE=signature,
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        entitlement = UserEntitlement.objects.get(user=self.user)
+        self.assertEqual(entitlement.parser_credits, 1)
 
     @override_settings(CASHFREE_WEBHOOK_SECRET="whsec_test")
     def test_cashfree_webhook_rejects_invalid_signature(self):
