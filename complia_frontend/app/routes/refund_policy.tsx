@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+﻿import { Link } from "react-router";
 import BrandMark from "../lib/brand_mark";
 
 import type { Route } from "./+types/refund_policy";
@@ -24,7 +24,7 @@ export default function RefundPolicyPage() {
           <BrandMark to="/" imageClassName="h-9 w-auto" />
           <Link
             to="/"
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800"
           >
             <span aria-hidden>&larr;</span> Back to home
           </Link>
@@ -63,7 +63,8 @@ export default function RefundPolicyPage() {
             <p className="mt-2">
               No refund is typically provided for completed digital delivery, user-side upload/input
               errors, or subjective dissatisfaction where service was materially delivered as
-              described.
+              described. Professional fees or invoices charged by a CA after case handoff are not
+              Complia payments and are handled separately between the user and the CA.
             </p>
           </div>
 
@@ -86,19 +87,19 @@ export default function RefundPolicyPage() {
 
         <div className="mt-8 border-t border-slate-200 pt-5 text-sm text-slate-600">
           Read related pages:{" "}
-          <Link to="/contact-us" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/contact-us" className="font-semibold text-indigo-800 hover:underline">
             Contact Us
           </Link>
           ,{" "}
-          <Link to="/cancellation-policy" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/cancellation-policy" className="font-semibold text-indigo-800 hover:underline">
             Cancellation Policy
           </Link>
           ,{" "}
-          <Link to="/terms-and-conditions" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/terms-and-conditions" className="font-semibold text-indigo-800 hover:underline">
             Terms and Conditions
           </Link>
           , and{" "}
-          <Link to="/privacy-policy" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/privacy-policy" className="font-semibold text-indigo-800 hover:underline">
             Privacy Policy
           </Link>
           .

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 
@@ -23,9 +23,11 @@ export default function CAHelpPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [noticeCode, setNoticeCode] = useState(prefillNoticeCode);
   const [message, setMessage] = useState("");
+  const [consentToShare, setConsentToShare] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   useEffect(() => {
     const userJson = localStorage.getItem("user");
@@ -46,12 +48,31 @@ export default function CAHelpPage() {
     });
   }, [prefillNoticeCode]);
 
-  const isFormValid = name.trim().length > 1 && email.trim().length > 3;
+  const isFormValid = name.trim().length > 1 && email.trim().length > 3 && consentToShare;
+
+  const validatePhone = (value: string): string | null => {
+    const cleaned = value.trim();
+    if (!cleaned) {
+      return null;
+    }
+    const normalized = cleaned.replace(/\s|-/g, "").replace(/^\+/, "");
+    if (!/^\d+$/.test(normalized) || normalized.length < 10 || normalized.length > 15) {
+      return "Phone number must be 10 to 15 digits.";
+    }
+    return null;
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isFormValid) {
-      setError("Please enter your name and email to continue.");
+      setError("Please complete your details and consent to CA handoff to continue.");
+      return;
+    }
+
+    const currentPhoneError = validatePhone(phoneNumber);
+    if (currentPhoneError) {
+      setPhoneError(currentPhoneError);
+      setError(currentPhoneError);
       return;
     }
 
@@ -66,15 +87,21 @@ export default function CAHelpPage() {
         email: email.trim(),
         phone_number: phoneNumber.trim(),
         message: message.trim(),
+        consent_to_share_with_ca: consentToShare,
       });
       trackEvent("ca_help_submitted", { notice_code: noticeCode || "general" });
       setSuccess("Request submitted. A CA expert will contact you shortly.");
       setName("");
       setPhoneNumber("");
       setMessage("");
-    } catch {
+      setPhoneError(null);
+    } catch (submitError) {
       trackEvent("ca_help_submit_failed", { notice_code: noticeCode || "general" });
-      setError("Could not submit your request. Please try again.");
+      if (submitError instanceof Error && submitError.message) {
+        setError(submitError.message);
+      } else {
+        setError("Could not submit your request. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -83,13 +110,13 @@ export default function CAHelpPage() {
   return (
     <div className="grid-aurora min-h-screen overflow-x-hidden px-4 py-6 text-slate-900 sm:px-5 sm:py-8">
       <main className="mx-auto w-full max-w-3xl">
-        <div className="mb-7 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-7 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <BrandMark to="/" imageClassName="h-9 w-auto" />
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">CA support</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-800">CA support</p>
             <h1 className="font-display mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Request professional help</h1>
           </div>
-          <Link to="/" className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700">
+          <Link to="/" className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-800">
             Back to search
           </Link>
         </div>
@@ -98,13 +125,23 @@ export default function CAHelpPage() {
           <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm font-semibold text-slate-900">What happens next?</p>
             <p className="mt-1 text-sm text-slate-600">
-              Submit this form and a CA specialist reviews your notice context, then contacts you to plan response steps.
+              Submit this form and Complia will route your case to one assigned CA so they can review your notice context and contact you with next steps.
             </p>
             {prefillNoticeCode && (
-              <p className="mt-2 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+              <p className="mt-2 inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-800">
                 Prefilled notice: {prefillNoticeCode}
               </p>
             )}
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/80 p-4">
+            <p className="text-sm font-semibold text-slate-900">How this handoff works</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+              <li>Complia collects your request, notice code, and case context.</li>
+              <li>We assign one CA contact instead of broadcasting your case widely.</li>
+              <li>The CA&apos;s professional fees and scope are agreed separately between you and the CA.</li>
+              <li>Complia tracks assignment, contact, and resolution status for service quality and support.</li>
+            </ul>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -114,7 +151,7 @@ export default function CAHelpPage() {
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                 placeholder="Your full name"
                 autoComplete="name"
               />
@@ -126,7 +163,7 @@ export default function CAHelpPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                 placeholder="you@example.com"
                 autoComplete="email"
               />
@@ -135,18 +172,25 @@ export default function CAHelpPage() {
               <label className="mb-1 block text-sm font-semibold text-slate-700">Phone (optional)</label>
               <input
                 value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setPhoneNumber(value);
+                  if (phoneError) {
+                    setPhoneError(validatePhone(value));
+                  }
+                }}
+                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                 placeholder="9876543210"
                 autoComplete="tel"
               />
+              {phoneError && <p className="mt-1 text-xs font-medium text-rose-700">{phoneError}</p>}
             </div>
             <div>
               <label className="mb-1 block text-sm font-semibold text-slate-700">Notice code (optional)</label>
               <input
                 value={noticeCode}
                 onChange={(e) => setNoticeCode(e.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                 placeholder="GST-DRC-01"
               />
             </div>
@@ -158,11 +202,23 @@ export default function CAHelpPage() {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               rows={5}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
               placeholder="Mention notice deadline, demand amount, and urgency."
             />
             <p className="mt-1 text-xs text-slate-500">Tip: include deadline date and claimed amount for faster triage.</p>
           </div>
+
+          <label className="mt-4 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <input
+              type="checkbox"
+              checked={consentToShare}
+              onChange={(e) => setConsentToShare(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-700 focus:ring-indigo-200"
+            />
+            <span className="text-sm leading-6 text-slate-700">
+              I authorize Complia to share my name, contact details, notice code, message, and related case summary with one assigned CA for follow-up on this request.
+            </span>
+          </label>
 
           {error && <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
           {success && (
@@ -175,7 +231,7 @@ export default function CAHelpPage() {
           <button
             type="submit"
             disabled={loading || !isFormValid}
-            className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:brightness-110 disabled:opacity-60"
+            className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#102a6b] to-[#163a86] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[#102a6b]/20 transition hover:brightness-110 disabled:opacity-60"
           >
             {loading ? "Submitting..." : "Submit request"}
           </button>

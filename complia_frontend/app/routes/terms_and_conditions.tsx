@@ -24,7 +24,7 @@ export default function TermsAndConditionsPage() {
           <BrandMark to="/" imageClassName="h-9 w-9" />
           <Link
             to="/"
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800"
           >
             <span aria-hidden>&larr;</span> Back to home
           </Link>
@@ -78,7 +78,18 @@ export default function TermsAndConditionsPage() {
           </div>
 
           <div>
-            <h2 className="font-display text-xl font-bold text-slate-900">5. Intellectual Property</h2>
+            <h2 className="font-display text-xl font-bold text-slate-900">5. CA Handoff and Professional Services</h2>
+            <p className="mt-2">
+              If you request CA help, you authorize Complia to share your case details with one
+              assigned CA or tax professional contact. Complia acts as a platform and intake layer,
+              not as the professional advisor of record. Any professional engagement, fee quote,
+              filing work, drafting work, or representation is a separate arrangement between you
+              and the CA unless Complia expressly states otherwise in writing.
+            </p>
+          </div>
+
+          <div>
+            <h2 className="font-display text-xl font-bold text-slate-900">6. Intellectual Property</h2>
             <p className="mt-2">
               Platform content, branding, and software are owned by Complia or licensed to Complia.
               You may not copy, reverse engineer, or redistribute proprietary assets without written
@@ -87,16 +98,17 @@ export default function TermsAndConditionsPage() {
           </div>
 
           <div>
-            <h2 className="font-display text-xl font-bold text-slate-900">6. Limitation of Liability</h2>
+            <h2 className="font-display text-xl font-bold text-slate-900">7. Limitation of Liability</h2>
             <p className="mt-2">
               To the maximum extent permitted by law, Complia is not liable for indirect or
               consequential losses arising from platform use, notice interpretation outcomes, missed
-              deadlines, or third-party service failures.
+              deadlines, third-party service failures, or professional advice and fees agreed
+              directly between a user and an assigned CA.
             </p>
           </div>
 
           <div>
-            <h2 className="font-display text-xl font-bold text-slate-900">7. Account Suspension</h2>
+            <h2 className="font-display text-xl font-bold text-slate-900">8. Account Suspension</h2>
             <p className="mt-2">
               Complia may suspend or terminate access for abusive behavior, fraud, policy
               violations, or legal compliance requirements.
@@ -104,7 +116,7 @@ export default function TermsAndConditionsPage() {
           </div>
 
           <div>
-            <h2 className="font-display text-xl font-bold text-slate-900">8. Changes to Terms</h2>
+            <h2 className="font-display text-xl font-bold text-slate-900">9. Changes to Terms</h2>
             <p className="mt-2">
               Terms may be updated from time to time. Continued use after updates constitutes
               acceptance of revised terms.
@@ -114,23 +126,23 @@ export default function TermsAndConditionsPage() {
 
         <div className="mt-8 border-t border-slate-200 pt-5 text-sm text-slate-600">
           Review our{" "}
-          <Link to="/privacy-policy" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/privacy-policy" className="font-semibold text-indigo-800 hover:underline">
             Privacy Policy
           </Link>
           ,{" "}
-          <Link to="/faq" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/faq" className="font-semibold text-indigo-800 hover:underline">
             FAQ
           </Link>
           ,{" "}
-          <Link to="/refund-policy" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/refund-policy" className="font-semibold text-indigo-800 hover:underline">
             Refund Policy
           </Link>
           , and{" "}
-          <Link to="/cancellation-policy" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/cancellation-policy" className="font-semibold text-indigo-800 hover:underline">
             Cancellation Policy
           </Link>
           , and{" "}
-          <Link to="/contact-us" className="font-semibold text-blue-700 hover:underline">
+          <Link to="/contact-us" className="font-semibold text-indigo-800 hover:underline">
             Contact Us
           </Link>
           .

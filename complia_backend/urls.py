@@ -26,11 +26,13 @@ from accounts.views import (
     ExperimentExposureCreateView,
     GoogleLogin,
     MyEntitlementsView,
+    MyCAHelpRequestListView,
     PaymentOrderCreateView,
     PaymentOrderGrantCreditsView,
     PaymentPlanListView,
     PaymentTestConfirmView,
     SuperAdminAssistedIntentViewSet,
+    SuperAdminCAPanelViewSet,
     SuperAdminCAHelpRequestViewSet,
     SuperAdminCsvExportView,
     SuperAdminFunnelView,
@@ -47,6 +49,7 @@ router_v1.register(r'saved-notices', SavedNoticeViewSet, basename='saved-notice'
 
 admin_router_v1 = routers.DefaultRouter()
 admin_router_v1.register(r'ca-requests', SuperAdminCAHelpRequestViewSet, basename='admin-ca-request')
+admin_router_v1.register(r'ca-panel', SuperAdminCAPanelViewSet, basename='admin-ca-panel')
 admin_router_v1.register(r'feedback', SuperAdminFeedbackViewSet, basename='admin-feedback')
 admin_router_v1.register(r'assisted-intents', SuperAdminAssistedIntentViewSet, basename='admin-assisted-intent')
 admin_router_v1.register(r'notices', SuperAdminNoticeTypeViewSet, basename='admin-notice')
@@ -64,6 +67,7 @@ urlpatterns = [
     path('api/v1/', include([
         path('', include(router_v1.urls)),
         path('ca-help/', CAHelpRequestCreateView.as_view(), name='ca-help-create'),
+        path('ca-help/my/', MyCAHelpRequestListView.as_view(), name='ca-help-my-list'),
         path('assisted-offer/', AssistedOfferConfigView.as_view(), name='assisted-offer-config'),
         path('assisted-intent/', AssistedIntentCreateView.as_view(), name='assisted-intent-create'),
         path('payments/plans/', PaymentPlanListView.as_view(), name='payment-plans'),

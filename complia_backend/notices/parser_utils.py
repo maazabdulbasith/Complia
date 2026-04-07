@@ -5,23 +5,91 @@ from decimal import Decimal, InvalidOperation
 from .models import NoticeType
 
 
+class NonNoticeDocumentError(ValueError):
+    pass
+
+
 def _normalize_text(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", value.lower())
 
 
+def _non_empty_lines(text: str):
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def analyze_notice_likelihood(text: str, filename: str = "") -> dict:
+    haystack = f"{filename}\n{text}".lower()
+    positive_patterns = {
+        "notice": r"\bnotice\b",
+        "gst": r"\bgst\b|\bgstr[-\s]?\d[a-z]?\b|\bgstin\b",
+        "income_tax": r"income\s*tax|\bitr\b|\bpan\b|\bais\b|\b26as\b|\be-?proceedings\b",
+        "legal_reference": r"\bsection\b|\bu/s\b|\bsec\.?\b|\brule\b",
+        "response_language": r"reply|respond|show cause|intimation|scrutiny|demand|assessment|hearing",
+        "official_markers": r"reference\s*no|din|document\s*identification\s*number|order\s*no|tax\s*period",
+        "department_markers": r"commissioner|assessing\s*officer|deputy\s*commissioner|central\s*board|department",
+    }
+    negative_patterns = {
+        "resume": r"resume|curriculum\s+vitae|objective|work\s+experience|employment\s+history|linkedin",
+        "education": r"education|university|college|bachelor|master|cgpa|gpa",
+        "skills": r"\bskills\b|python|javascript|react|node\.?js|sql|c\+\+|java|typescript",
+        "portfolio": r"portfolio|github|projects|achievements|hobbies|interests|references",
+    }
+
+    positives = [label for label, pattern in positive_patterns.items() if re.search(pattern, haystack)]
+    negatives = [label for label, pattern in negative_patterns.items() if re.search(pattern, haystack)]
+
+    score = (len(positives) * 2) - (len(negatives) * 3)
+    line_count = len(_non_empty_lines(text))
+    if line_count >= 8:
+        score += 1
+    if re.search(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}", haystack):
+        score += 1
+
+    is_likely_notice = len(positives) >= 2 and score >= 3 and "resume" not in negatives
+
+    return {
+        "is_likely_notice": is_likely_notice,
+        "score": score,
+        "positives": positives,
+        "negatives": negatives,
+    }
+
+
 def extract_amount(text: str):
-    amount_match = re.search(
-        r"(?i)(?:amount|tax|demand|penalty|interest)[^\n]{0,40}?(?:rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)",
-        text,
-    )
-    if not amount_match:
-        amount_match = re.search(r"(?i)(?:rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)", text)
-    if not amount_match:
-        return None
-    raw = amount_match.group(1).replace(",", "")
+    contextual_patterns = [
+        r"(?i)(?:amount|tax|demand|penalty|interest|liability|short[\s-]?paid|payable)[^\n]{0,60}?(?:rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)",
+        r"(?i)(?:amount|tax|demand|penalty|interest|liability|short[\s-]?paid|payable)[^\n]{0,40}?([\d,]+(?:\.\d{1,2})?)",
+        r"(?i)(?:demand\s+of|liability\s+of|tax\s+payable\s+of)[^\n]{0,30}?([\d,]+(?:\.\d{1,2})?)",
+    ]
+    fallback_pattern = r"(?i)(?:rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)"
+
+    for pattern in contextual_patterns:
+        amount_match = re.search(pattern, text)
+        if amount_match:
+            parsed = _parse_amount_candidate(amount_match.group(1))
+            if parsed is not None:
+                return parsed
+
+    for line in _non_empty_lines(text):
+        if not re.search(r"(?i)(amount|tax|demand|penalty|interest|liability|payable|short[\s-]?paid)", line):
+            continue
+        amount_match = re.search(fallback_pattern, line)
+        if amount_match:
+            parsed = _parse_amount_candidate(amount_match.group(1))
+            if parsed is not None:
+                return parsed
+
+    return None
+
+
+def _parse_amount_candidate(raw_value: str):
+    raw = raw_value.replace(",", "").strip()
     parts = raw.split(".", 1)
     integer_part = parts[0].lstrip("0") or "0"
     fractional_part = parts[1] if len(parts) > 1 else ""
+    # Ignore tiny OCR garbage such as isolated section/rule numbers wrongly read as amounts.
+    if not fractional_part and integer_part.isdigit() and int(integer_part) < 100:
+        return None
     # ParserExtraction.amount_claimed uses DecimalField(max_digits=14, decimal_places=2),
     # so cap to 12 digits before decimal and 2 after to avoid DB overflow errors.
     if len(integer_part) > 12 or len(fractional_part) > 2:
@@ -35,20 +103,48 @@ def extract_amount(text: str):
 def extract_legal_section(text: str) -> str:
     patterns = [
         r"(?i)section\s+under\s+which\s+notice\s+is\s+issued\s*[:\-]?\s*([0-9A-Za-z()\-/.]+)",
+        r"(?i)act\s*/?\s*rules?\s+provisions?\s*[:\-]?\s*([0-9A-Za-z()\-/.]+)",
         r"(?i)\bu/s\.?\s*([0-9A-Za-z()\-/.]+)",
+        r"(?i)\bsec(?:tion)?\.?\s*([0-9]{1,3}[A-Za-z]?(?:\([0-9A-Za-z]+\))?)",
         r"(?i)\bsection\s+([0-9]{1,3}[A-Za-z]?(?:\([0-9A-Za-z]+\))?)",
     ]
     for pattern in patterns:
         section_match = re.search(pattern, text)
         if section_match:
-            token = section_match.group(1).strip()[:100]
-            return f"Section {token}"[:120]
+            token = _clean_legal_token(section_match.group(1))
+            if token:
+                if token.lower().startswith(("section ", "rule ")):
+                    return token[:120]
+                return f"Section {token}"[:120]
 
     rule_match = re.search(r"(?i)\brule\s+([0-9]{1,3}(?:\([0-9A-Za-z]+\))?)", text)
     if rule_match:
-        token = rule_match.group(1).strip()[:100]
-        return f"Rule {token}"[:120]
+        token = _clean_legal_token(rule_match.group(1))
+        if token:
+            return f"Rule {token}"[:120]
+
+    for line in _non_empty_lines(text):
+        normalized_line = re.sub(r"\s+", " ", line).strip()
+        explicit_match = re.search(
+            r"(?i)(section|rule)\s*(?:under\s+which\s+notice\s+is\s+issued)?\s*[:\-]?\s*([0-9]{1,3}[A-Za-z]?(?:\([0-9A-Za-z]+\))?)",
+            normalized_line,
+        )
+        if explicit_match:
+            prefix = explicit_match.group(1).title()
+            token = _clean_legal_token(explicit_match.group(2))
+            if token:
+                return f"{prefix} {token}"[:120]
     return ""
+
+
+def _clean_legal_token(token: str) -> str:
+    cleaned = token.strip().strip(":.-,;")
+    if not cleaned:
+        return ""
+    match = re.search(r"([0-9]{1,3}[A-Za-z]?(?:\([0-9A-Za-z]+\))?)", cleaned)
+    if match:
+        return match.group(1)[:100]
+    return cleaned[:100]
 
 
 def detect_notice_type(text: str, filename: str):
@@ -85,6 +181,7 @@ def detect_notice_type(text: str, filename: str):
 def extract_deadline_date(text: str):
     patterns = [
         r"(?i)(?:date\s+by\s+which\s+reply(?:\s+has\s+to\s+be)?\s+submitted|reply\s+by|last\s+date|due\s+date)[^\d]{0,30}(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+        r"(?i)(?:respond\s+before|reply\s+before|submit\s+before)[^\d]{0,20}(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
         r"(?i)(?:hearing\s+date|date\s+of\s+hearing)[^\d]{0,30}(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
     ]
     for pattern in patterns:

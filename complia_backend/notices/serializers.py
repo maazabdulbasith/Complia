@@ -10,6 +10,27 @@ from .models import (
     SavedNotice,
     TriggerKeyword,
 )
+from accounts.models import CAHelpRequest
+
+
+class SafeCARequestSummarySerializer(serializers.ModelSerializer):
+    assigned_ca_name = serializers.CharField(source="assigned_ca.display_name", read_only=True)
+
+    class Meta:
+        model = CAHelpRequest
+        fields = [
+            "id",
+            "status",
+            "priority",
+            "assigned_ca_name",
+            "assigned_to_email",
+            "assigned_at",
+            "contacted_at",
+            "engaged_at",
+            "closed_at",
+            "created_at",
+        ]
+        read_only_fields = fields
 
 
 class TriggerKeywordSerializer(serializers.ModelSerializer):
@@ -60,13 +81,27 @@ class AdminNoticeTypeSerializer(serializers.ModelSerializer):
             "is_active",
             "verified_by",
             "verified_at",
+            "source_url",
+            "source_last_checked_at",
+            "source_last_changed_at",
+            "source_check_error",
+            "review_status",
             "meta_title",
             "meta_description",
             "updated_at",
             "is_stale",
             "trigger_keywords",
         ]
-        read_only_fields = ["id", "code", "updated_at", "is_stale", "trigger_keywords"]
+        read_only_fields = [
+            "id",
+            "code",
+            "updated_at",
+            "is_stale",
+            "trigger_keywords",
+            "source_last_checked_at",
+            "source_last_changed_at",
+            "source_check_error",
+        ]
 
     def get_trigger_keywords(self, obj):
         return list(obj.triggers.values_list("keyword", flat=True))
@@ -131,6 +166,7 @@ class SavedNoticeSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    ca_request = serializers.SerializerMethodField()
 
     class Meta:
         model = SavedNotice
@@ -141,6 +177,7 @@ class SavedNoticeSerializer(serializers.ModelSerializer):
             "parser_job_id",
             "parser_job_ref",
             "parser_snapshot",
+            "ca_request",
             "action_status",
             "ca_brief",
             "next_steps_checklist",
@@ -148,6 +185,17 @@ class SavedNoticeSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "notice", "parser_job_id", "created_at", "updated_at"]
+
+    def get_ca_request(self, obj):
+        request = (
+            CAHelpRequest.objects.filter(user=obj.user, notice_code=obj.notice.code)
+            .select_related("assigned_ca")
+            .order_by("-created_at")
+            .first()
+        )
+        if not request:
+            return None
+        return SafeCARequestSummarySerializer(request).data
 
     def validate_next_steps_checklist(self, value):
         if value in (None, ""):

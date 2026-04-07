@@ -14,6 +14,7 @@ from .models import (
     AnalyticsEvent,
     AssistedOffer,
     AssistedIntent,
+    CAPanelProfile,
     CAHelpRequest,
     ExperimentExposure,
     PaymentOrder,
@@ -51,10 +52,13 @@ class CAHelpRequestTests(APITestCase):
             "email": "ravi@example.com",
             "phone_number": "9876543210",
             "message": "Need help replying within deadline.",
+            "consent_to_share_with_ca": True,
         }
         response = self.client.post("/api/v1/ca-help/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["status"], "new")
+        self.assertTrue(response.data["consent_to_share_with_ca"])
+        self.assertIsNotNone(response.data["consent_recorded_at"])
 
     def test_create_ca_help_request_invalid_payload(self):
         response = self.client.post("/api/v1/ca-help/", {"email": "x@example.com"}, format="json")
@@ -68,11 +72,23 @@ class CAHelpRequestTests(APITestCase):
             "name": "Ravi Kumar",
             "email": "ravi@example.com",
             "phone_number": "abc123",
+            "consent_to_share_with_ca": True,
         }
         response = self.client.post("/api/v1/ca-help/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["status"], "error")
         self.assertIn("phone_number", response.data["errors"])
+
+    def test_create_ca_help_request_requires_consent(self):
+        payload = {
+            "name": "Ravi Kumar",
+            "email": "ravi@example.com",
+            "consent_to_share_with_ca": False,
+        }
+        response = self.client.post("/api/v1/ca-help/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["status"], "error")
+        self.assertIn("consent_to_share_with_ca", response.data["errors"])
 
 
 class AnalyticsTests(APITestCase):
@@ -175,6 +191,20 @@ class SuperAdminCARequestOpsTests(APITestCase):
     def setUp(self):
         self.admin = User.objects.create_user(email="admin@complia.in", password="pass123456", user_type="admin")
         self.user = User.objects.create_user(email="user@complia.in", password="pass123456", user_type="taxpayer")
+        self.ca_user = User.objects.create_user(
+            email="ca1@example.com",
+            password="pass123456",
+            user_type="ca",
+            is_verified_ca=True,
+        )
+        self.ca_profile = CAPanelProfile.objects.create(
+            user=self.ca_user,
+            display_name="Aarav Shah",
+            email="ca1@example.com",
+            city="Bengaluru",
+            specialties=["GST", "Income Tax Notices"],
+            is_active=True,
+        )
         self.request_item = CAHelpRequest.objects.create(
             user=self.user,
             notice_code="GST-DRC-01",
@@ -182,6 +212,8 @@ class SuperAdminCARequestOpsTests(APITestCase):
             email="ravi@example.com",
             phone_number="9876543210",
             message="Need urgent help",
+            consent_to_share_with_ca=True,
+            consent_recorded_at=timezone.now(),
             status="new",
         )
 
@@ -198,15 +230,86 @@ class SuperAdminCARequestOpsTests(APITestCase):
 
         update_response = self.client.patch(
             f"/api/v1/admin/ca-requests/{self.request_item.id}/",
-            {"status": "contacted", "priority": "high", "internal_notes": "Called customer"},
+            {
+                "status": "assigned",
+                "priority": "high",
+                "assigned_ca": self.ca_profile.id,
+                "internal_notes": "Assigned to CA",
+            },
             format="json",
         )
         self.assertEqual(update_response.status_code, status.HTTP_200_OK)
         self.request_item.refresh_from_db()
-        self.assertEqual(self.request_item.status, "contacted")
+        self.assertEqual(self.request_item.status, "assigned")
         self.assertEqual(self.request_item.priority, "high")
-        self.assertEqual(self.request_item.internal_notes, "Called customer")
+        self.assertEqual(self.request_item.internal_notes, "Assigned to CA")
+        self.assertEqual(self.request_item.assigned_ca_id, self.ca_profile.id)
+        self.assertEqual(self.request_item.assigned_to_email, "ca1@example.com")
+        self.assertIsNotNone(self.request_item.assigned_at)
+        self.assertIsNotNone(self.request_item.shared_case_materials_at)
+
+        engaged_response = self.client.patch(
+            f"/api/v1/admin/ca-requests/{self.request_item.id}/",
+            {"status": "engaged"},
+            format="json",
+        )
+        self.assertEqual(engaged_response.status_code, status.HTTP_200_OK)
+        self.request_item.refresh_from_db()
+        self.assertEqual(self.request_item.status, "engaged")
+        self.assertIsNotNone(self.request_item.engaged_at)
+
+        contacted_response = self.client.patch(
+            f"/api/v1/admin/ca-requests/{self.request_item.id}/",
+            {"status": "contacted"},
+            format="json",
+        )
+        self.assertEqual(contacted_response.status_code, status.HTTP_200_OK)
+        self.request_item.refresh_from_db()
         self.assertIsNotNone(self.request_item.contacted_at)
+
+    def test_admin_can_list_ca_panel(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get("/api/v1/admin/ca-panel/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data["results"] if isinstance(response.data, dict) and "results" in response.data else response.data
+        self.assertGreaterEqual(len(results), 1)
+        self.assertTrue(any(item["display_name"] == "Aarav Shah" for item in results))
+
+    def test_admin_can_create_and_update_ca_panel_profile(self):
+        self.client.force_authenticate(user=self.admin)
+        create_response = self.client.post(
+            "/api/v1/admin/ca-panel/",
+            {
+                "display_name": "Meera Iyer",
+                "email": "meera@example.com",
+                "phone_number": "9876543211",
+                "city": "Chennai",
+                "specialties": ["GST", "ITR"],
+                "turnaround_sla_hours": 12,
+                "is_active": True,
+                "notes": "Great with salaryman notices",
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        profile_id = create_response.data["id"]
+
+        update_response = self.client.patch(
+            f"/api/v1/admin/ca-panel/{profile_id}/",
+            {"is_active": False, "notes": "Temporarily unavailable"},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        profile = CAPanelProfile.objects.get(id=profile_id)
+        self.assertFalse(profile.is_active)
+        self.assertEqual(profile.notes, "Temporarily unavailable")
+
+    def test_user_can_view_own_ca_requests(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get("/api/v1/ca-help/my/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["notice_code"], "GST-DRC-01")
 
     def test_admin_can_export_ca_requests_csv(self):
         self.client.force_authenticate(user=self.admin)

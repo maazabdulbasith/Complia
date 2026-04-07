@@ -2,6 +2,13 @@
 
 @theme {
   --font-sans: "Sora", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-700: #1d3f8f;
+  --color-brand-800: #152f73;
+  --color-brand-900: #0f245e;
 
   --animate-shimmer: shimmer 2.2s linear infinite;
   --animate-float: float 8s ease-in-out infinite;
@@ -28,8 +35,8 @@
 
 html,
 body {
-  background: #f6f9ff;
-  color: #0f172a;
+  background: #f4f7ff;
+  color: #0f245e;
 }
 
 body {
@@ -42,9 +49,9 @@ body {
 
 .grid-aurora {
   background-image:
-    radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.2) 0, rgba(59, 130, 246, 0) 42%),
-    radial-gradient(circle at 80% 0%, rgba(14, 165, 233, 0.18) 0, rgba(14, 165, 233, 0) 38%),
-    linear-gradient(120deg, #f8fbff 0%, #edf4ff 55%, #f8fbff 100%);
+    radial-gradient(circle at 18% 18%, rgba(21, 47, 115, 0.18) 0, rgba(21, 47, 115, 0) 42%),
+    radial-gradient(circle at 82% 4%, rgba(29, 63, 143, 0.16) 0, rgba(29, 63, 143, 0) 40%),
+    linear-gradient(120deg, #f9fbff 0%, #edf2ff 55%, #f8faff 100%);
 }
 
 .noise-layer {

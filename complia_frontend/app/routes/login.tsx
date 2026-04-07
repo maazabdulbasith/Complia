@@ -85,16 +85,18 @@ export default function LoginPage() {
 
   return (
     <div className="grid-aurora relative min-h-screen overflow-x-hidden px-4 py-8 sm:px-5 sm:py-10">
-      <div className="pointer-events-none absolute -top-32 left-1/3 h-96 w-96 rounded-full bg-sky-300/25 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-0 -right-20 h-80 w-80 rounded-full bg-blue-300/20 blur-3xl" />
+      <div className="pointer-events-none absolute -top-32 left-1/3 h-96 w-96 rounded-full bg-indigo-300/25 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 -right-20 h-80 w-80 rounded-full bg-indigo-300/20 blur-3xl" />
 
       <main className="relative z-10 mx-auto flex w-full max-w-5xl flex-col gap-6 sm:gap-8 md:flex-row md:items-center">
         <section className="md:w-1/2">
-          <BrandMark to="/" imageClassName="h-9 sm:h-10 w-auto" />
-          <Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-700">
-            <span aria-hidden>&larr;</span> Back to search
-          </Link>
-          <p className="mt-8 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-blue-700">
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <BrandMark to="/" imageClassName="h-9 sm:h-10 w-auto" />
+            <Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-indigo-800">
+              <span aria-hidden>&larr;</span> Back to search
+            </Link>
+          </div>
+          <p className="mt-8 inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-indigo-800">
             Secure access
           </p>
           <h1 className="font-display mt-4 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl md:text-5xl">
@@ -146,23 +148,23 @@ export default function LoginPage() {
               By signing in, you agree to Complia terms and privacy policy.
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-              <Link to="/contact-us" className="font-semibold text-slate-600 hover:text-blue-700">
+              <Link to="/contact-us" className="font-semibold text-slate-600 hover:text-indigo-800">
                 Contact
               </Link>
               <span>·</span>
-              <Link to="/terms-and-conditions" className="font-semibold text-slate-600 hover:text-blue-700">
+              <Link to="/terms-and-conditions" className="font-semibold text-slate-600 hover:text-indigo-800">
                 Terms
               </Link>
               <span>·</span>
-              <Link to="/privacy-policy" className="font-semibold text-slate-600 hover:text-blue-700">
+              <Link to="/privacy-policy" className="font-semibold text-slate-600 hover:text-indigo-800">
                 Privacy
               </Link>
               <span>·</span>
-              <Link to="/refund-policy" className="font-semibold text-slate-600 hover:text-blue-700">
+              <Link to="/refund-policy" className="font-semibold text-slate-600 hover:text-indigo-800">
                 Refunds
               </Link>
               <span>·</span>
-              <Link to="/cancellation-policy" className="font-semibold text-slate-600 hover:text-blue-700">
+              <Link to="/cancellation-policy" className="font-semibold text-slate-600 hover:text-indigo-800">
                 Cancellation
               </Link>
             </div>

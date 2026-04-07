@@ -52,7 +52,7 @@ function severityTone(severity: "low" | "medium" | "high") {
   if (severity === "medium") {
     return "bg-amber-50 text-amber-700 ring-amber-200";
   }
-  return "bg-sky-50 text-sky-700 ring-sky-200";
+  return "bg-indigo-50 text-indigo-800 ring-indigo-200";
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
@@ -139,18 +139,18 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(homeSchema) }}
       />
       <div className="noise-layer pointer-events-none absolute inset-0 opacity-30" />
-      <div className="pointer-events-none absolute -top-32 -right-20 h-96 w-96 rounded-full bg-sky-300/25 blur-3xl animate-float" />
-      <div className="pointer-events-none absolute top-56 -left-24 h-80 w-80 rounded-full bg-blue-300/25 blur-3xl animate-float [animation-delay:1200ms]" />
+      <div className="pointer-events-none absolute -top-32 -right-20 h-96 w-96 rounded-full bg-indigo-300/25 blur-3xl animate-float" />
+      <div className="pointer-events-none absolute top-56 -left-24 h-80 w-80 rounded-full bg-indigo-300/25 blur-3xl animate-float [animation-delay:1200ms]" />
 
       <header className="sticky top-0 z-40 border-b border-white/60 bg-white/75 backdrop-blur-xl">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4 sm:h-18 sm:px-5">
-          <BrandMark to="/" imageClassName="h-8 w-8 sm:h-10 sm:w-10" />
+          <BrandMark to="/" imageClassName="h-8 w-auto sm:h-10 sm:w-auto" />
 
           {/* ── Desktop nav (sm+) ── */}
           <div className="hidden items-center gap-2 sm:flex">
             <Link
               to="/contact-us"
-              className="rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+              className="rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800"
             >
               Contact Us
             </Link>
@@ -159,14 +159,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 {user.user_type === "admin" && (
                   <Link
                     to="/superadmin"
-                    className="rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                    className="rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800"
                   >
                     SuperAdmin
                   </Link>
                 )}
                 <Link
                   to="/saved"
-                  className="rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                  className="rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800"
                 >
                   Safe
                 </Link>
@@ -261,7 +261,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       <main className="mx-auto w-full max-w-6xl px-4 pb-16 pt-8 sm:px-5 sm:pb-20 sm:pt-12 md:pt-16">
         <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
           <div>
-            <p className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-blue-700">
+            <p className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-indigo-800">
               India tax notices, simplified
             </p>
             <h1 className="font-display mt-4 text-3xl font-bold tracking-tight text-slate-950 sm:mt-5 sm:text-4xl md:text-6xl md:leading-[1.05]">
@@ -270,7 +270,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600 sm:mt-5 sm:text-lg">
               Search by code, keyword, or section. Get plain-English explanation, severity, legal context, and next actions.
             </p>
-            <div className="mt-5 flex flex-wrap gap-2 sm:mt-6">
+            <div className="mt-5 grid gap-2 sm:mt-6 sm:flex sm:flex-wrap">
               <Link
                 to="/parser"
                 onClick={() =>
@@ -278,13 +278,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     source_path: "/",
                   })
                 }
-                className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 sm:px-5 sm:py-3"
+                className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 sm:w-auto sm:px-5 sm:py-3"
               >
                 Upload Notice & Understand
               </Link>
               <Link
                 to="/ca-help"
-                className="inline-flex items-center justify-center rounded-2xl border border-slate-300/80 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 sm:px-5 sm:py-3"
+                className="inline-flex w-full items-center justify-center rounded-2xl border border-slate-300/80 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800 sm:w-auto sm:px-5 sm:py-3"
               >
                 Talk to a CA
               </Link>
@@ -294,6 +294,26 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               >
                 Browse FAQ
               </Link>
+            </div>
+            <div className="mt-5 grid max-w-3xl gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Search</p>
+                <p className="mt-1 text-sm leading-6 text-slate-700">
+                  Best when you already know the notice code and want the plain-English breakdown.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-indigo-200/80 bg-indigo-50/80 px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-indigo-800">Upload</p>
+                <p className="mt-1 text-sm leading-6 text-slate-700">
+                  Best when you only have the actual notice file and want a case-ready response pack.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Safe</p>
+                <p className="mt-1 text-sm leading-6 text-slate-700">
+                  Save the notice, parser result, and CA handoff brief so nothing gets lost later.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -330,14 +350,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Try GST-DRC-01, ASMT-10, Scrutiny, Section 143"
-                className="h-13 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 text-[15px] font-medium text-slate-900 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                className="h-13 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 text-[15px] font-medium text-slate-900 outline-none transition focus:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-100"
                 autoComplete="off"
               />
             </label>
 
             <button
               type="submit"
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-4 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:brightness-110 active:scale-[0.99] sm:h-13 sm:px-6"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#102a6b] to-[#163a86] px-4 text-sm font-semibold text-white shadow-lg shadow-[#102a6b]/25 transition hover:brightness-110 active:scale-[0.99] sm:h-13 sm:px-6"
             >
               {isSearchNavigation && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />}
               Search Notices
@@ -351,7 +371,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   key={item}
                   to={`/?q=${encodeURIComponent(item)}`}
                   onClick={() => trackEvent("frequent_search_clicked", { term: item })}
-                  className="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 transition hover:border-blue-300 hover:text-blue-700"
+                  className="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 transition hover:border-indigo-300 hover:text-indigo-800"
                 >
                   {item}
                 </Link>
@@ -378,7 +398,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     notice_code: notice.code,
                   });
                 }}
-                className="group block rounded-3xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_40px_rgba(15,23,42,0.07)] transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_20px_50px_rgba(37,99,235,0.12)] sm:p-7"
+                className="group block rounded-3xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_40px_rgba(15,23,42,0.07)] transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[0_20px_50px_rgba(37,99,235,0.12)] sm:p-7"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-xs font-semibold text-slate-600">{notice.code}</span>
@@ -386,9 +406,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     {notice.severity === "high" ? "Action Required" : notice.severity === "medium" ? "Review Needed" : "Informational"}
                   </span>
                 </div>
-                <h2 className="mt-4 font-display text-xl font-bold tracking-tight text-slate-900 transition group-hover:text-blue-700 sm:text-2xl">{notice.title}</h2>
+                <h2 className="mt-4 font-display text-xl font-bold tracking-tight text-slate-900 transition group-hover:text-indigo-800 sm:text-2xl">{notice.title}</h2>
                 <p className="mt-3 text-[15px] leading-7 text-slate-600">{notice.summary}</p>
-                <p className="mt-5 text-sm font-semibold text-blue-700">Read full breakdown</p>
+                <p className="mt-5 text-sm font-semibold text-indigo-800">Read full breakdown</p>
               </Link>
             ))
           ) : query ? (
@@ -461,27 +481,27 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <footer className="mt-12 border-t border-slate-200/80 pt-5 text-xs text-slate-500 sm:mt-14 sm:pt-6">
           <div className="flex flex-wrap items-center gap-2">
             <span>Legal:</span>
-            <Link to="/faq" className="font-semibold text-slate-600 hover:text-blue-700">
+            <Link to="/faq" className="font-semibold text-slate-600 hover:text-indigo-800">
               FAQ
             </Link>
             <span>·</span>
-            <Link to="/contact-us" className="font-semibold text-slate-600 hover:text-blue-700">
+            <Link to="/contact-us" className="font-semibold text-slate-600 hover:text-indigo-800">
               Contact Us
             </Link>
             <span>·</span>
-            <Link to="/terms-and-conditions" className="font-semibold text-slate-600 hover:text-blue-700">
+            <Link to="/terms-and-conditions" className="font-semibold text-slate-600 hover:text-indigo-800">
               Terms & Conditions
             </Link>
             <span>·</span>
-            <Link to="/privacy-policy" className="font-semibold text-slate-600 hover:text-blue-700">
+            <Link to="/privacy-policy" className="font-semibold text-slate-600 hover:text-indigo-800">
               Privacy Policy
             </Link>
             <span>·</span>
-            <Link to="/refund-policy" className="font-semibold text-slate-600 hover:text-blue-700">
+            <Link to="/refund-policy" className="font-semibold text-slate-600 hover:text-indigo-800">
               Refund Policy
             </Link>
             <span>·</span>
-            <Link to="/cancellation-policy" className="font-semibold text-slate-600 hover:text-blue-700">
+            <Link to="/cancellation-policy" className="font-semibold text-slate-600 hover:text-indigo-800">
               Cancellation Policy
             </Link>
           </div>
@@ -496,7 +516,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     <div className="mx-auto min-h-screen max-w-3xl px-6 py-16 text-slate-900">
       <h1 className="text-3xl font-bold tracking-tight text-rose-700">Error Loading Data</h1>
       <p className="mt-3 text-slate-600">{error instanceof Error ? error.message : "Could not fetch data from backend."}</p>
-      <Link to="/" className="mt-6 inline-flex rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700">
+      <Link to="/" className="mt-6 inline-flex rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-800">
         Back to home
       </Link>
     </div>

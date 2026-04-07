@@ -2,6 +2,32 @@ import { sendAnalyticsEvent } from "../api/client";
 
 type AnalyticsProperties = Record<string, string | number | boolean | null | undefined>;
 
+const SERVER_TRACKED_EVENTS = new Set([
+  "page_view",
+  "search_performed",
+  "notice_search",
+  "notice_opened",
+  "notice_detail_viewed",
+  "ca_help_started",
+  "search_result_clicked",
+  "notice_saved",
+  "notice_unsaved",
+  "ca_help_submitted",
+  "assisted_offer_seen",
+  "assisted_offer_clicked",
+  "payment_plan_viewed",
+  "payment_order_created",
+  "payment_checkout_opened",
+  "payment_success",
+  "payment_failed",
+  "credit_consumed",
+  "paid_parser_result_viewed",
+  "admin_dashboard_viewed",
+  "admin_dashboard_heartbeat",
+  "admin_ca_request_updated",
+  "admin_feedback_updated",
+]);
+
 type GtagEvent = (
   command: "event",
   action: string,
@@ -53,12 +79,14 @@ export function trackEvent(eventName: string, properties: AnalyticsProperties = 
       window.gtag("event", eventName, properties);
     }
 
-    void sendAnalyticsEvent({
-      event_name: eventName,
-      path: window.location.pathname,
-      metadata: properties,
-      session_id: getAnalyticsSessionId(),
-    });
+    if (SERVER_TRACKED_EVENTS.has(eventName)) {
+      void sendAnalyticsEvent({
+        event_name: eventName,
+        path: window.location.pathname,
+        metadata: properties,
+        session_id: getAnalyticsSessionId(),
+      });
+    }
   } catch {
     // Analytics must never block product interactions.
   }

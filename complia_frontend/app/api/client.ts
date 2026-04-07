@@ -17,6 +17,7 @@ export type SavedNotice = {
   notice: NoticeType;
   parser_job_id?: number | null;
   parser_snapshot?: Record<string, unknown>;
+  ca_request?: SafeCARequest | null;
   action_status?: "not_started" | "in_progress" | "done";
   ca_brief?: string;
   next_steps_checklist?: string[];
@@ -45,6 +46,30 @@ export type CAHelpRequestPayload = {
   email: string;
   phone_number?: string;
   message?: string;
+  consent_to_share_with_ca: boolean;
+};
+
+export type MyCAHelpRequest = {
+  id: number;
+  notice_code: string;
+  name: string;
+  email: string;
+  phone_number: string;
+  message: string;
+  consent_to_share_with_ca: boolean;
+  consent_recorded_at: string | null;
+  status: "new" | "triaged" | "assigned" | "contacted" | "engaged" | "resolved" | "closed";
+  priority: "low" | "medium" | "high";
+  assigned_ca: number | null;
+  assigned_ca_name: string;
+  assigned_to_email: string;
+  assigned_at: string | null;
+  shared_case_materials_at: string | null;
+  contacted_at: string | null;
+  engaged_at: string | null;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type AssistedIntentPayload = {
@@ -122,14 +147,49 @@ export type AdminCARequest = {
   email: string;
   phone_number: string;
   message: string;
-  status: "new" | "triaged" | "contacted" | "resolved" | "closed";
+  consent_to_share_with_ca: boolean;
+  consent_recorded_at: string | null;
+  status: "new" | "triaged" | "assigned" | "contacted" | "engaged" | "resolved" | "closed";
   priority: "low" | "medium" | "high";
+  assigned_ca: number | null;
+  assigned_ca_name: string;
   assigned_to_email: string;
+  assigned_at: string | null;
+  shared_case_materials_at: string | null;
   internal_notes: string;
   contacted_at: string | null;
+  engaged_at: string | null;
   closed_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type CAPanelProfile = {
+  id: number;
+  user?: number | null;
+  user_email?: string;
+  display_name: string;
+  email: string;
+  phone_number: string;
+  icai_membership_number: string;
+  city: string;
+  specialties: string[];
+  turnaround_sla_hours: number;
+  is_active: boolean;
+  notes?: string;
+};
+
+export type SafeCARequest = {
+  id: number;
+  status: "new" | "triaged" | "assigned" | "contacted" | "engaged" | "resolved" | "closed";
+  priority: "low" | "medium" | "high";
+  assigned_ca_name: string;
+  assigned_to_email: string;
+  assigned_at: string | null;
+  contacted_at: string | null;
+  engaged_at: string | null;
+  closed_at: string | null;
+  created_at: string;
 };
 
 export type AdminFeedbackItem = {
@@ -175,6 +235,11 @@ export type AdminNoticeItem = {
   is_active: boolean;
   verified_by: string | null;
   verified_at: string | null;
+  source_url: string;
+  source_last_checked_at: string | null;
+  source_last_changed_at: string | null;
+  source_check_error: string;
+  review_status: "watch" | "trusted" | "needs_review";
   meta_title: string;
   meta_description: string;
   updated_at: string;
@@ -390,6 +455,22 @@ function deriveMessageFromEnvelope(envelope: ApiErrorEnvelope | null, fallback: 
       return firstValue;
     }
   }
+
+  // DRF validation errors may come as top-level field keys:
+  // { "phone_number": ["Phone number must be 10 to 15 digits."] }
+  const reservedKeys = new Set(["status", "message", "detail", "code", "errors", "details"]);
+  for (const [key, value] of Object.entries(envelope)) {
+    if (reservedKeys.has(key)) {
+      continue;
+    }
+    if (Array.isArray(value) && value.length > 0) {
+      return String(value[0]);
+    }
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+
   return fallback;
 }
 
@@ -601,11 +682,26 @@ export async function updateSafeEntry(
 }
 
 export async function submitCAHelpRequest(payload: CAHelpRequestPayload): Promise<void> {
-  const response = await fetchWithAuth(`${API_BASE}/ca-help/`, {
+  // CA help endpoint is AllowAny. We try with auth first so logged-in users
+  // are linked; if token is stale, retry without auth instead of hard-failing.
+  const baseRequest = {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  };
+  const authHeaders = getAuthHeaders();
+
+  let response = await fetch(`${API_BASE}/ca-help/`, {
+    ...baseRequest,
+    headers: { "Content-Type": "application/json", ...authHeaders },
   });
+
+  if (response.status === 401) {
+    response = await fetch(`${API_BASE}/ca-help/`, {
+      ...baseRequest,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   if (!response.ok) {
     throw new Error(await getApiErrorMessage(response, "Failed to submit CA help request"));
   }
@@ -772,9 +868,77 @@ export async function getAdminCARequests(status?: string): Promise<AdminCAReques
   throw new Error("Unexpected admin CA requests response format");
 }
 
+export async function getMyCAHelpRequests(noticeCode?: string): Promise<MyCAHelpRequest[]> {
+  const query = noticeCode ? `?notice_code=${encodeURIComponent(noticeCode)}` : "";
+  const response = await fetchWithAuth(`${API_BASE}/ca-help/my/${query}`);
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Failed to fetch CA help requests"));
+  }
+  const data = await response.json();
+  if (isPaginatedResponse<MyCAHelpRequest>(data)) {
+    return data.results;
+  }
+  if (Array.isArray(data)) {
+    return data;
+  }
+  throw new Error("Unexpected CA help requests response format");
+}
+
+export async function getAdminCAPanel(): Promise<CAPanelProfile[]> {
+  const response = await fetchWithAuth(`${API_BASE}/admin/ca-panel/`);
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Failed to fetch CA panel"));
+  }
+  const data = await response.json();
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (isPaginatedResponse<CAPanelProfile>(data)) {
+    return data.results;
+  }
+  throw new Error("Unexpected CA panel response format");
+}
+
+export async function createAdminCAPanelProfile(
+  payload: Pick<
+    CAPanelProfile,
+    "display_name" | "email" | "phone_number" | "icai_membership_number" | "city" | "specialties" | "turnaround_sla_hours" | "is_active"
+  > & { notes?: string; user?: number | null }
+): Promise<CAPanelProfile> {
+  const response = await fetchWithAuth(`${API_BASE}/admin/ca-panel/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Failed to create CA panel profile"));
+  }
+  return response.json();
+}
+
+export async function updateAdminCAPanelProfile(
+  profileId: number,
+  payload: Partial<
+    Pick<
+      CAPanelProfile,
+      "display_name" | "email" | "phone_number" | "icai_membership_number" | "city" | "specialties" | "turnaround_sla_hours" | "is_active"
+    > & { notes?: string; user?: number | null }
+  >
+): Promise<CAPanelProfile> {
+  const response = await fetchWithAuth(`${API_BASE}/admin/ca-panel/${profileId}/`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Failed to update CA panel profile"));
+  }
+  return response.json();
+}
+
 export async function updateAdminCARequest(
   requestId: number,
-  payload: Partial<Pick<AdminCARequest, "status" | "priority" | "assigned_to_email" | "internal_notes">>
+  payload: Partial<Pick<AdminCARequest, "status" | "priority" | "assigned_ca" | "assigned_to_email" | "internal_notes">>
 ): Promise<AdminCARequest> {
   const response = await fetchWithAuth(`${API_BASE}/admin/ca-requests/${requestId}/`, {
     method: "PATCH",
@@ -879,7 +1043,9 @@ export async function grantAdminPaymentCredits(orderId: string): Promise<Payment
   return data.order;
 }
 
-export async function getAdminNoticeItems(status?: "stale" | "unverified"): Promise<AdminNoticeItem[]> {
+export async function getAdminNoticeItems(
+  status?: "stale" | "unverified" | "needs_review" | "missing_source" | "trusted" | "watch" | "source_error"
+): Promise<AdminNoticeItem[]> {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
   const response = await fetchWithAuth(`${API_BASE}/admin/notices/${query}`);
   if (!response.ok) {
@@ -897,7 +1063,12 @@ export async function getAdminNoticeItems(status?: "stale" | "unverified"): Prom
 
 export async function updateAdminNoticeItem(
   noticeId: number,
-  payload: Partial<Pick<AdminNoticeItem, "is_active" | "verified_by" | "verified_at" | "meta_title" | "meta_description">>
+  payload: Partial<
+    Pick<
+      AdminNoticeItem,
+      "is_active" | "verified_by" | "verified_at" | "meta_title" | "meta_description" | "source_url" | "review_status"
+    >
+  >
 ): Promise<AdminNoticeItem> {
   const response = await fetchWithAuth(`${API_BASE}/admin/notices/${noticeId}/`, {
     method: "PATCH",

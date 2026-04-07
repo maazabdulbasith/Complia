@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 from datetime import timedelta
+from io import StringIO
 from unittest.mock import Mock, patch
 
 import requests
@@ -13,7 +14,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 from .models import NoticeFeedback, NoticeType, ParserBenchmarkRun, ParserExtraction, ParserJob, SavedNotice, TriggerKeyword
-from accounts.models import User, UserEntitlement
+from .parser_utils import parse_notice_document
+from accounts.models import CAHelpRequest, User, UserEntitlement
 
 class NoticeAPITests(APITestCase):
     def setUp(self):
@@ -167,6 +169,23 @@ class NoticeAPITests(APITestCase):
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
         self.assertEqual(list_response.data["count"], 1)
         self.assertEqual(list_response.data["results"][0]["notice"]["code"], self.notice.code)
+
+    def test_saved_notice_includes_latest_ca_request_summary(self):
+        self.client.force_authenticate(user=self.user)
+        CAHelpRequest.objects.create(
+            user=self.user,
+            notice_code=self.notice.code,
+            name="Tester",
+            email=self.user.email,
+            consent_to_share_with_ca=True,
+            consent_recorded_at=timezone.now(),
+            status="contacted",
+        )
+        self.client.post(reverse("saved-notice-list"), {"notice_id": self.notice.id}, format="json")
+
+        list_response = self.client.get(reverse("saved-notice-list"))
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["results"][0]["ca_request"]["status"], "contacted")
 
     def test_save_notice_delete(self):
         self.client.force_authenticate(user=self.user)
@@ -451,6 +470,109 @@ class NoticeAPITests(APITestCase):
         response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertLessEqual(len(response.data["extraction"]["legal_section"] or ""), 120)
+
+    @override_settings(PARSER_PRIVATE_BETA_ENABLED=True, PARSER_BETA_EMAILS={"betaresume@complia.in"})
+    def test_parser_upload_rejects_non_notice_and_keeps_credit_consumed(self):
+        beta_user = User.objects.create_user(email="betaresume@complia.in", password="pass123456", user_type="taxpayer")
+        UserEntitlement.objects.create(
+            user=beta_user,
+            parser_credits=1,
+            lifetime_purchased_credits=1,
+            lifetime_consumed_credits=0,
+        )
+        self.client.force_authenticate(user=beta_user)
+        resume_text = (
+            "Resume\n"
+            "Objective: Software engineer role\n"
+            "Work Experience: Built React and Python systems\n"
+            "Education: Bachelor of Technology\n"
+            "Skills: JavaScript, TypeScript, Python, SQL, React\n"
+            "LinkedIn: linkedin.com/in/example\n"
+        )
+        upload = SimpleUploadedFile("resume.txt", resume_text.encode("utf-8"), content_type="text/plain")
+
+        response = self.client.post("/api/v1/parser/upload/", {"file": upload}, format="multipart")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(response.data["code"], "NOT_A_NOTICE")
+        entitlement = UserEntitlement.objects.get(user=beta_user)
+        self.assertEqual(entitlement.parser_credits, 0)
+        self.assertEqual(entitlement.lifetime_consumed_credits, 1)
+        self.assertEqual(ParserJob.objects.count(), 0)
+
+    def test_parse_notice_document_ignores_noise_amount_and_reads_act_rules_section(self):
+        NoticeType.objects.create(
+            code="GST-ASMT-10",
+            title="Scrutiny of Returns",
+            summary="Scrutiny notice",
+            detailed_explanation="Explanation",
+            consequences_of_ignoring="Penalty",
+            next_steps="Reply",
+            severity="medium",
+            is_active=True,
+        )
+        noisy_text = (
+            "GST ASMT - 10 [See rule 99(1)]\n"
+            "Act/ Rules Provisions:\n"
+            "The proper officer may scrutinize the return.\n"
+            "Section under which notice is issued 61\n"
+            "Date by which reply has to be submitted 23/12/2024\n"
+            "RIFFB WEBPVP8 random payload 8.00 5F% unrelated OCR noise\n"
+        )
+
+        parsed = parse_notice_document(noisy_text, "ASMT10.txt")
+
+        self.assertEqual(parsed["notice"].code, "GST-ASMT-10")
+        self.assertEqual(parsed["legal_section"], "Section 61")
+        self.assertIsNone(parsed["amount_claimed"])
+        self.assertEqual(parsed["deadline_date"].isoformat(), "2024-12-23")
+
+    def test_parse_notice_document_prefers_contextual_amount_over_ocr_noise(self):
+        NoticeType.objects.create(
+            code="GST-DRC-01",
+            title="Demand Order",
+            summary="Demand notice",
+            detailed_explanation="Explanation",
+            consequences_of_ignoring="Penalty",
+            next_steps="Reply",
+            severity="high",
+            is_active=True,
+        )
+        parsed = parse_notice_document(
+            (
+                "GST DRC-01 demand order\n"
+                "RIFF WEBP random OCR 8.00 5F% noise\n"
+                "Tax payable of INR 125000 must be discharged.\n"
+                "U/S 73 reply required.\n"
+            ),
+            "drc01.txt",
+        )
+
+        self.assertEqual(parsed["notice"].code, "GST-DRC-01")
+        self.assertEqual(str(parsed["amount_claimed"]), "125000")
+        self.assertEqual(parsed["legal_section"], "Section 73")
+
+    def test_parse_notice_document_reads_sec_shorthand(self):
+        notice = NoticeType.objects.create(
+            code="IT-148",
+            title="Income Escaping Assessment",
+            summary="Reassessment",
+            detailed_explanation="Explanation",
+            consequences_of_ignoring="Penalty",
+            next_steps="Reply",
+            severity="high",
+            is_active=True,
+        )
+        TriggerKeyword.objects.create(notice_type=notice, keyword="escaped assessment")
+
+        parsed = parse_notice_document(
+            "Notice under sec. 148 for escaped assessment. Respond before 14/04/2026.",
+            "section148.txt",
+        )
+
+        self.assertEqual(parsed["notice"].code, "IT-148")
+        self.assertEqual(parsed["legal_section"], "Section 148")
+        self.assertEqual(parsed["deadline_date"].isoformat(), "2026-04-14")
 
     @override_settings(PARSER_PRIVATE_BETA_ENABLED=True, PARSER_BETA_EMAILS={"beta5@complia.in"})
     def test_parser_upload_sanitizes_nul_bytes_for_text_payload(self):
@@ -897,3 +1019,76 @@ class NoticeAPITests(APITestCase):
         call_command("ensure_notice_baseline", "--target", "30", "--verified-by", "QA Team")
         self.assertGreaterEqual(NoticeType.objects.filter(is_active=True).count(), 30)
         self.assertGreaterEqual(NoticeType.objects.filter(is_active=True, verified_at__isnull=False).count(), 30)
+
+    def test_superadmin_notice_filter_supports_needs_review_and_missing_source(self):
+        admin = User.objects.create_user(email="admin-notice@complia.in", password="pass123456", user_type="admin")
+        self.notice.review_status = "needs_review"
+        self.notice.source_url = "https://example.com/source"
+        self.notice.save(update_fields=["review_status", "source_url"])
+
+        self.client.force_authenticate(user=admin)
+        review_response = self.client.get("/api/v1/admin/notices/?status=needs_review")
+        self.assertEqual(review_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(review_response.data["count"], 1)
+
+        missing_source_response = self.client.get("/api/v1/admin/notices/?status=missing_source")
+        self.assertEqual(missing_source_response.status_code, status.HTTP_200_OK)
+        result_codes = [row["code"] for row in missing_source_response.data["results"]]
+        self.assertIn("HIGH-001", result_codes)
+
+    def test_superadmin_notice_update_source_metadata(self):
+        admin = User.objects.create_user(email="admin-notice-edit@complia.in", password="pass123456", user_type="admin")
+        self.client.force_authenticate(user=admin)
+        response = self.client.patch(
+            f"/api/v1/admin/notices/{self.notice.id}/",
+            {
+                "source_url": "https://example.com/gst-asmt-10",
+                "review_status": "trusted",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.notice.refresh_from_db()
+        self.assertEqual(self.notice.source_url, "https://example.com/gst-asmt-10")
+        self.assertEqual(self.notice.review_status, "trusted")
+
+    @patch("complia_backend.notices.management.commands.check_notice_sources.requests.get")
+    def test_check_notice_sources_command_stores_baseline_hash(self, mock_get):
+        self.notice.source_url = "https://example.com/asmt-10"
+        self.notice.review_status = "watch"
+        self.notice.save(update_fields=["source_url", "review_status"])
+
+        mock_response = Mock()
+        mock_response.content = b"<html><body>Official GST ASMT-10 reference</body></html>"
+        mock_response.headers = {"Content-Type": "text/html"}
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        out = StringIO()
+        call_command("check_notice_sources", "--code", self.notice.code, stdout=out)
+
+        self.notice.refresh_from_db()
+        self.assertTrue(self.notice.source_content_hash)
+        self.assertIsNotNone(self.notice.source_last_checked_at)
+        self.assertEqual(self.notice.review_status, "watch")
+        self.assertEqual(self.notice.source_check_error, "")
+        self.assertIn("baseline hash stored", out.getvalue())
+
+    @patch("complia_backend.notices.management.commands.check_notice_sources.requests.get")
+    def test_check_notice_sources_marks_changed_notice_for_review(self, mock_get):
+        self.notice.source_url = "https://example.com/asmt-10"
+        self.notice.source_content_hash = "old-hash"
+        self.notice.review_status = "trusted"
+        self.notice.save(update_fields=["source_url", "source_content_hash", "review_status"])
+
+        mock_response = Mock()
+        mock_response.content = b"new official source content"
+        mock_response.headers = {"Content-Type": "text/plain"}
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        call_command("check_notice_sources", "--code", self.notice.code)
+
+        self.notice.refresh_from_db()
+        self.assertEqual(self.notice.review_status, "needs_review")
+        self.assertIsNotNone(self.notice.source_last_changed_at)

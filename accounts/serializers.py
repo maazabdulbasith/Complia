@@ -8,6 +8,7 @@ from .models import (
     AnalyticsEvent,
     AssistedOffer,
     AssistedIntent,
+    CAPanelProfile,
     CAHelpRequest,
     ExperimentExposure,
     PaymentOrder,
@@ -39,6 +40,9 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
 
 class CAHelpRequestSerializer(serializers.ModelSerializer):
+    assigned_ca = serializers.IntegerField(source="assigned_ca.id", read_only=True)
+    assigned_ca_name = serializers.CharField(source="assigned_ca.display_name", read_only=True)
+
     class Meta:
         model = CAHelpRequest
         fields = [
@@ -48,22 +52,33 @@ class CAHelpRequestSerializer(serializers.ModelSerializer):
             "email",
             "phone_number",
             "message",
+            "consent_to_share_with_ca",
+            "consent_recorded_at",
             "status",
             "priority",
+            "assigned_ca",
+            "assigned_ca_name",
             "assigned_to_email",
+            "assigned_at",
+            "shared_case_materials_at",
             "internal_notes",
             "contacted_at",
+            "engaged_at",
             "closed_at",
             "created_at",
             "updated_at",
         ]
         read_only_fields = [
             "id",
+            "consent_recorded_at",
             "status",
             "priority",
             "assigned_to_email",
+            "assigned_at",
+            "shared_case_materials_at",
             "internal_notes",
             "contacted_at",
+            "engaged_at",
             "closed_at",
             "created_at",
             "updated_at",
@@ -87,6 +102,24 @@ class CAHelpRequestSerializer(serializers.ModelSerializer):
         if not normalized.isdigit() or not 10 <= len(normalized) <= 15:
             raise serializers.ValidationError("Phone number must be 10 to 15 digits.")
         return cleaned
+
+    def validate_notice_code(self, value):
+        return (value or "").strip()
+
+    def validate_message(self, value):
+        return (value or "").strip()
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not attrs.get("consent_to_share_with_ca"):
+            raise serializers.ValidationError(
+                {
+                    "consent_to_share_with_ca": [
+                        "Please confirm that Complia may share this case with one assigned CA."
+                    ]
+                }
+            )
+        return attrs
 
 
 class AnalyticsEventSerializer(serializers.ModelSerializer):
@@ -144,6 +177,8 @@ class AnalyticsEventSerializer(serializers.ModelSerializer):
 
 
 class AdminCAHelpRequestSerializer(serializers.ModelSerializer):
+    assigned_ca_name = serializers.CharField(source="assigned_ca.display_name", read_only=True)
+
     class Meta:
         model = CAHelpRequest
         fields = [
@@ -153,16 +188,60 @@ class AdminCAHelpRequestSerializer(serializers.ModelSerializer):
             "email",
             "phone_number",
             "message",
+            "consent_to_share_with_ca",
+            "consent_recorded_at",
             "status",
             "priority",
+            "assigned_ca",
+            "assigned_ca_name",
             "assigned_to_email",
+            "assigned_at",
+            "shared_case_materials_at",
             "internal_notes",
             "contacted_at",
+            "engaged_at",
             "closed_at",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class CAPanelProfileSerializer(serializers.ModelSerializer):
+    user_email = serializers.CharField(source="user.email", read_only=True)
+
+    class Meta:
+        model = CAPanelProfile
+        fields = [
+            "id",
+            "user",
+            "user_email",
+            "display_name",
+            "email",
+            "phone_number",
+            "icai_membership_number",
+            "city",
+            "specialties",
+            "turnaround_sla_hours",
+            "is_active",
+            "notes",
+        ]
+        read_only_fields = ["id", "user_email"]
+
+    def validate_email(self, value):
+        return value.strip().lower()
+
+    def validate_specialties(self, value):
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Specialties must be an array of strings.")
+        cleaned = []
+        for item in value:
+            text = str(item).strip()
+            if text:
+                cleaned.append(text[:80])
+        return cleaned
 
 
 class AssistedIntentSerializer(serializers.ModelSerializer):

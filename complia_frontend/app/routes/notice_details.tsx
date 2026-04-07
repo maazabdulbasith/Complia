@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import type { Route } from "./+types/notice_details";
@@ -61,8 +61,8 @@ function severityMeta(severity: "low" | "medium" | "high") {
   }
   return {
     label: "Informational",
-    badge: "bg-sky-50 text-sky-700 ring-sky-200",
-    card: "border-sky-200 bg-sky-50/70",
+    badge: "bg-indigo-50 text-indigo-800 ring-indigo-200",
+    card: "border-indigo-200 bg-indigo-50/70",
   };
 }
 
@@ -358,7 +358,7 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
           <BrandMark to="/" imageClassName="h-9 w-9" />
           <Link
             to="/"
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 sm:px-4"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-800 sm:px-4"
           >
             <span aria-hidden>&larr;</span> Back to search
           </Link>
@@ -366,13 +366,13 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
         </div>
 
         <article className="overflow-hidden rounded-[24px] border border-slate-200/80 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:rounded-[30px]">
-          <header className="border-b border-slate-200/80 bg-linear-to-r from-slate-50 to-blue-50/60 px-4 py-6 sm:px-6 sm:py-8 md:px-10 md:py-10">
+          <header className="border-b border-slate-200/80 bg-linear-to-r from-slate-50 to-indigo-50/60 px-4 py-6 sm:px-6 sm:py-8 md:px-10 md:py-10">
             <div className="flex flex-wrap items-center gap-3">
               <span className="rounded-lg bg-white px-2.5 py-1 font-mono text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
                 {notice.code}
               </span>
               {notice.source_section && (
-                <span className="rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
+                <span className="rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-indigo-800 ring-1 ring-indigo-200">
                   {notice.source_section}
                 </span>
               )}
@@ -402,9 +402,9 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
                 <p className="mt-3 text-[15px] leading-7 text-slate-700 break-words">{notice.consequences_of_ignoring}</p>
               </section>
 
-              <section className="rounded-2xl border border-blue-200 bg-linear-to-r from-blue-600 to-cyan-500 p-6 text-white shadow-lg shadow-blue-600/20">
+              <section className="rounded-2xl border border-indigo-200 bg-linear-to-r from-[#102a6b] to-[#163a86] p-6 text-white shadow-lg shadow-[#102a6b]/20">
                 <h2 className="font-display text-xl font-bold tracking-tight">Recommended next steps</h2>
-                <p className="mt-3 whitespace-pre-line break-words text-[15px] leading-7 text-blue-50">{notice.next_steps}</p>
+                <p className="mt-3 whitespace-pre-line break-words text-[15px] leading-7 text-indigo-50">{notice.next_steps}</p>
               </section>
             </div>
 
@@ -427,7 +427,7 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
                         notice_code: notice.code,
                       })
                     }
-                    className="inline-flex w-full items-center justify-center rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-2.5 text-sm font-semibold text-cyan-700 transition hover:bg-cyan-100"
+                    className="inline-flex w-full items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-800 transition hover:bg-indigo-100"
                   >
                     Upload Notice & Understand
                   </Link>
@@ -441,7 +441,7 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
                   <Link
                     to={`/ca-help?notice=${encodeURIComponent(notice.code)}`}
                     onClick={() => trackEvent("ca_help_cta_clicked", { notice_code: notice.code })}
-                    className="inline-flex w-full items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+                    className="inline-flex w-full items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-800 transition hover:bg-indigo-100"
                   >
                     Talk to a CA
                   </Link>
@@ -500,7 +500,7 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     rows={3}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
                     placeholder="Tell us what was missing or unclear"
                   />
                   <button
@@ -555,27 +555,27 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
                 value={assistedName}
                 onChange={(event) => setAssistedName(event.target.value)}
                 placeholder="Your name"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:col-span-2"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100 sm:col-span-2"
               />
               <input
                 value={assistedEmail}
                 onChange={(event) => setAssistedEmail(event.target.value)}
                 placeholder="Email"
                 type="email"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
               />
               <input
                 value={assistedPhone}
                 onChange={(event) => setAssistedPhone(event.target.value)}
                 placeholder="Phone"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
               />
               <textarea
                 value={assistedMessage}
                 onChange={(event) => setAssistedMessage(event.target.value)}
                 rows={3}
                 placeholder="Optional context (deadline, amount, urgency)"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:col-span-2"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100 sm:col-span-2"
               />
             </div>
 
