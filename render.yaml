@@ -134,6 +134,15 @@ services:
       - key: VITE_ENABLE_ANALYTICS
         value: true
     routes:
+      - type: redirect
+        source: /sitemap.xml
+        destination: https://complia-mzrq.onrender.com/sitemap.xml
+      - type: redirect
+        source: /robots.txt
+        destination: https://complia-mzrq.onrender.com/robots.txt
+      - type: redirect
+        source: /api/*
+        destination: https://complia-mzrq.onrender.com/api/*
       - type: rewrite
         source: /*
         destination: /index.html

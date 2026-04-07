@@ -4,9 +4,18 @@ export type FaqItem = {
 };
 
 export const SITE_NAME = "Complia";
+const SITE_URL_ENV = (import.meta.env.VITE_SITE_URL as string | undefined) || "https://complia.in";
+export const SITE_URL = SITE_URL_ENV.replace(/\/$/, "");
+export const DEFAULT_OG_IMAGE_PATH = "/brand/complia-logo-wordmark.png";
+export const DEFAULT_OG_IMAGE_URL = `${SITE_URL}${DEFAULT_OG_IMAGE_PATH}`;
 
 export const SITE_DESCRIPTION =
   "Understand GST and Income Tax notices in plain English, know urgency, and see the next action fast.";
+
+export function absoluteSiteUrl(pathname: string): string {
+  const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return `${SITE_URL}${normalizedPath}`;
+}
 
 export const SEO_FAQS: FaqItem[] = [
   {
