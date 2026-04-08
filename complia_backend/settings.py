@@ -194,6 +194,7 @@ REST_FRAMEWORK = {
         "parser_upload": "20/hour",
         "admin_metrics": "600/hour",
         "admin_ops": "600/hour",
+        "dj_rest_auth": "30/hour",
     },
     "EXCEPTION_HANDLER": "complia_backend.exceptions.custom_exception_handler",
 }
@@ -221,6 +222,7 @@ REST_AUTH = {
     "JWT_AUTH_HTTPONLY": True,
     "TOKEN_MODEL": None,
     "USER_DETAILS_SERIALIZER": "accounts.serializers.UserDetailSerializer",
+    "REGISTER_SERIALIZER": "accounts.serializers.EmailRegisterSerializer",
 }
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")

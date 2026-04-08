@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.utils import timezone
+from dj_rest_auth.registration.serializers import RegisterSerializer
 from rest_framework import serializers
 
 from .models import (
@@ -37,6 +38,18 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "is_verified_ca",
         )
         read_only_fields = ("email", "is_verified_ca")
+
+
+class EmailRegisterSerializer(RegisterSerializer):
+    username = None
+    email = serializers.EmailField(required=True)
+
+    def get_cleaned_data(self):
+        return {
+            "username": "",
+            "password1": self.validated_data.get("password1", ""),
+            "email": self.validated_data.get("email", ""),
+        }
 
 
 class CAHelpRequestSerializer(serializers.ModelSerializer):
