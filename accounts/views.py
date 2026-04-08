@@ -8,11 +8,15 @@ from datetime import timedelta
 from io import StringIO
 
 import requests
+from allauth.account import app_settings as allauth_account_settings
 from django.conf import settings
 from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare
+from dj_rest_auth.app_settings import api_settings as dj_rest_auth_api_settings
+from dj_rest_auth.registration.views import RegisterView
+from dj_rest_auth.utils import jwt_encode
 from rest_framework import filters, generics, mixins, permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle as DRFScopedRateThrottle
@@ -56,6 +60,19 @@ from .serializers import (
 )
 
 ScopedRateThrottle = CompliaScopedRateThrottle or DRFScopedRateThrottle
+
+
+class EmailRegisterView(RegisterView):
+    def perform_create(self, serializer):
+        user = serializer.save(self.request._request)
+        if allauth_account_settings.EMAIL_VERIFICATION == allauth_account_settings.EmailVerificationMethod.MANDATORY:
+            return user
+
+        if dj_rest_auth_api_settings.USE_JWT:
+            self.access_token, self.refresh_token = jwt_encode(user)
+        elif self.token_model:
+            dj_rest_auth_api_settings.TOKEN_CREATOR(self.token_model, user, serializer)
+        return user
 
 
 def _window_to_start(window: str) -> timezone.datetime:

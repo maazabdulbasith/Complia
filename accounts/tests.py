@@ -187,6 +187,49 @@ class GoogleLoginTests(APITestCase):
         self.assertTrue(user.is_superuser)
 
 
+class EmailRegistrationTests(APITestCase):
+    def test_email_registration_succeeds_without_username(self):
+        response = self.client.post(
+            "/api/v1/auth/registration/",
+            {
+                "email": "new-email-user@complia.in",
+                "password1": "StrongPass123!",
+                "password2": "StrongPass123!",
+            },
+            format="json",
+            HTTP_HOST="localhost",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("access", response.data)
+        self.assertTrue(User.objects.filter(email="new-email-user@complia.in").exists())
+
+    def test_email_login_after_registration(self):
+        self.client.post(
+            "/api/v1/auth/registration/",
+            {
+                "email": "login-after-register@complia.in",
+                "password1": "StrongPass123!",
+                "password2": "StrongPass123!",
+            },
+            format="json",
+            HTTP_HOST="localhost",
+        )
+
+        login_response = self.client.post(
+            "/api/v1/auth/login/",
+            {
+                "email": "login-after-register@complia.in",
+                "password": "StrongPass123!",
+            },
+            format="json",
+            HTTP_HOST="localhost",
+        )
+
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", login_response.data)
+
+
 class SuperAdminCARequestOpsTests(APITestCase):
     def setUp(self):
         self.admin = User.objects.create_user(email="admin@complia.in", password="pass123456", user_type="admin")
