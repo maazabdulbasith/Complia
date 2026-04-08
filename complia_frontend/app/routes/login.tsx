@@ -1,7 +1,7 @@
-ï»¿import { useGoogleLogin } from "@react-oauth/google";
-import { useNavigate, Link, useSearchParams } from "react-router";
-import { useState } from "react";
+import { useGoogleLogin } from "@react-oauth/google";
 import { jwtDecode } from "jwt-decode";
+import { useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { trackEvent } from "../lib/analytics";
 import BrandMark from "../lib/brand_mark";
@@ -9,6 +9,8 @@ import type { Route } from "./+types/login";
 
 const API_BASE_RAW = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api/v1";
 const API_BASE = API_BASE_RAW.endsWith("/api/v1") ? API_BASE_RAW : `${API_BASE_RAW}/api/v1`;
+
+type AuthPayload = Record<string, unknown>;
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -22,7 +24,88 @@ export default function LoginPage() {
   const [searchParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [activeMode, setActiveMode] = useState<"signin" | "signup">("signin");
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupConfirmPassword, setSignupConfirmPassword] = useState("");
+
   const googleConfigured = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
+
+  const redirectAfterSuccess = () => {
+    const next = searchParams.get("next") || "/";
+    navigate(next);
+  };
+
+  const extractApiError = async (response: Response, fallback: string) => {
+    let message = fallback;
+    try {
+      const errorPayload = (await response.json()) as Record<string, unknown>;
+      const detail = typeof errorPayload.detail === "string" ? errorPayload.detail : "";
+      const rootMessage = typeof errorPayload.message === "string" ? errorPayload.message : "";
+      if (rootMessage) {
+        message = rootMessage;
+      } else if (detail) {
+        message = detail;
+      } else {
+        const firstField = Object.keys(errorPayload)[0];
+        const firstValue = firstField ? errorPayload[firstField] : null;
+        if (Array.isArray(firstValue) && firstValue.length > 0) {
+          message = String(firstValue[0]);
+        } else if (typeof firstValue === "string" && firstValue.trim()) {
+          message = firstValue;
+        }
+      }
+    } catch {
+      // Keep fallback
+    }
+    return message;
+  };
+
+  const persistSession = async (payload: AuthPayload, fallbackEmail = "") => {
+    const access =
+      (typeof payload.access === "string" && payload.access) ||
+      (typeof payload.token === "string" && payload.token) ||
+      "";
+    const refresh = (typeof payload.refresh === "string" && payload.refresh) || "";
+
+    if (!access) {
+      throw new Error("Sign-in succeeded but access token was missing.");
+    }
+
+    localStorage.setItem("complia_token", access);
+    if (refresh) {
+      localStorage.setItem("complia_refresh_token", refresh);
+    }
+
+    let userPayload: Record<string, unknown> | null =
+      payload.user && typeof payload.user === "object"
+        ? (payload.user as Record<string, unknown>)
+        : null;
+
+    if (!userPayload) {
+      try {
+        const userResponse = await fetch(`${API_BASE}/auth/user/`, {
+          headers: { Authorization: `Bearer ${access}` },
+        });
+        if (userResponse.ok) {
+          userPayload = (await userResponse.json()) as Record<string, unknown>;
+        }
+      } catch {
+        // fallback below
+      }
+    }
+
+    if (!userPayload) {
+      const decoded = jwtDecode<{ email?: string }>(access);
+      userPayload = { email: fallbackEmail || decoded.email || "User" };
+    }
+
+    localStorage.setItem("user", JSON.stringify(userPayload));
+  };
 
   const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
@@ -36,42 +119,17 @@ export default function LoginPage() {
         });
 
         if (!backendResponse.ok) {
-          let backendMessage = "Authentication failed";
-          try {
-            const errorPayload = await backendResponse.json();
-            backendMessage =
-              errorPayload?.message ||
-              errorPayload?.detail ||
-              errorPayload?.errors?.detail ||
-              backendMessage;
-          } catch {
-            // Keep fallback message when response is not JSON.
-          }
-          throw new Error(backendMessage);
+          throw new Error(await extractApiError(backendResponse, "Google authentication failed."));
         }
 
-        const data = await backendResponse.json();
-        localStorage.setItem("complia_token", data.access);
-        if (data.refresh) {
-          localStorage.setItem("complia_refresh_token", data.refresh);
-        }
-        if (data.user) {
-          localStorage.setItem("user", JSON.stringify(data.user));
-        } else {
-          const decoded = jwtDecode<{ email?: string }>(data.access);
-          localStorage.setItem("user", JSON.stringify({ email: decoded.email || "User" }));
-        }
+        const data = (await backendResponse.json()) as AuthPayload;
+        await persistSession(data);
 
         trackEvent("login_success", { provider: "google" });
-        const next = searchParams.get("next") || "/";
-        navigate(next);
+        redirectAfterSuccess();
       } catch (err) {
         trackEvent("login_failed", { provider: "google" });
-        if (err instanceof Error && err.message) {
-          setError(err.message);
-        } else {
-          setError("Sign-in failed. Please try again.");
-        }
+        setError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -82,6 +140,72 @@ export default function LoginPage() {
     },
     flow: "implicit",
   });
+
+  const handleEmailSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_BASE}/auth/login/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await extractApiError(response, "Email sign-in failed. Check credentials and retry."));
+      }
+
+      const data = (await response.json()) as AuthPayload;
+      await persistSession(data, email.trim());
+      trackEvent("login_success", { provider: "email_password" });
+      redirectAfterSuccess();
+    } catch (err) {
+      trackEvent("login_failed", { provider: "email_password" });
+      setError(err instanceof Error ? err.message : "Email sign-in failed. Please retry.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailSignUp = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    if (signupPassword !== signupConfirmPassword) {
+      setLoading(false);
+      setError("Passwords do not match.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/auth/registration/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: signupEmail.trim(),
+          password1: signupPassword,
+          password2: signupConfirmPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await extractApiError(response, "Account creation failed. Please retry."));
+      }
+
+      const data = (await response.json()) as AuthPayload;
+      await persistSession(data, signupEmail.trim());
+      trackEvent("login_success", { provider: "email_signup" });
+      redirectAfterSuccess();
+    } catch (err) {
+      trackEvent("login_failed", { provider: "email_signup" });
+      setError(err instanceof Error ? err.message : "Account creation failed. Please retry.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="grid-aurora relative min-h-screen overflow-x-hidden px-4 py-8 sm:px-5 sm:py-10">
@@ -110,9 +234,133 @@ export default function LoginPage() {
         <section className="md:w-1/2">
           <div className="rounded-[24px] border border-slate-200/80 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:rounded-[30px] sm:p-7 md:p-8">
             <h2 className="font-display text-2xl font-bold tracking-tight text-slate-900">Welcome to Complia</h2>
-            <p className="mt-2 text-sm text-slate-600">Continue with Google to secure your account.</p>
+            <p className="mt-2 text-sm text-slate-600">Use email/password or Google to access your Safe workspace.</p>
+
+            <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+              <button
+                type="button"
+                onClick={() => setActiveMode("signin")}
+                className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                  activeMode === "signin" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
+                }`}
+              >
+                Sign in
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveMode("signup")}
+                className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                  activeMode === "signup" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
+                }`}
+              >
+                Create account
+              </button>
+            </div>
 
             {error && <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
+
+            {activeMode === "signin" ? (
+              <form onSubmit={handleEmailSignIn} className="mt-5 space-y-3">
+                <div>
+                  <label htmlFor="signin-email" className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Email
+                  </label>
+                  <input
+                    id="signin-email"
+                    type="email"
+                    required
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-hidden ring-indigo-200 transition focus:border-indigo-400 focus:ring-2"
+                    placeholder="you@company.com"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="signin-password" className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Password
+                  </label>
+                  <input
+                    id="signin-password"
+                    type="password"
+                    required
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-hidden ring-indigo-200 transition focus:border-indigo-400 focus:ring-2"
+                    placeholder="Your password"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
+                >
+                  {loading ? "Signing in..." : "Sign in with email"}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleEmailSignUp} className="mt-5 space-y-3">
+                <div>
+                  <label htmlFor="signup-email" className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Email
+                  </label>
+                  <input
+                    id="signup-email"
+                    type="email"
+                    required
+                    autoComplete="email"
+                    value={signupEmail}
+                    onChange={(e) => setSignupEmail(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-hidden ring-indigo-200 transition focus:border-indigo-400 focus:ring-2"
+                    placeholder="you@company.com"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="signup-password" className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Password
+                  </label>
+                  <input
+                    id="signup-password"
+                    type="password"
+                    required
+                    autoComplete="new-password"
+                    value={signupPassword}
+                    onChange={(e) => setSignupPassword(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-hidden ring-indigo-200 transition focus:border-indigo-400 focus:ring-2"
+                    placeholder="At least 8 characters"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="signup-password-confirm" className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Confirm password
+                  </label>
+                  <input
+                    id="signup-password-confirm"
+                    type="password"
+                    required
+                    autoComplete="new-password"
+                    value={signupConfirmPassword}
+                    onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-hidden ring-indigo-200 transition focus:border-indigo-400 focus:ring-2"
+                    placeholder="Repeat password"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
+                >
+                  {loading ? "Creating account..." : "Create account"}
+                </button>
+              </form>
+            )}
+
+            <div className="mt-5 flex items-center gap-3 text-xs text-slate-400">
+              <span className="h-px flex-1 bg-slate-200" />
+              <span>OR</span>
+              <span className="h-px flex-1 bg-slate-200" />
+            </div>
 
             <button
               onClick={() => {
@@ -123,7 +371,7 @@ export default function LoginPage() {
                 googleLogin();
               }}
               disabled={loading || !googleConfigured}
-              className="mt-6 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-slate-900 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
+              className="mt-4 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-slate-900 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
             >
               {loading ? (
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -151,19 +399,19 @@ export default function LoginPage() {
               <Link to="/contact-us" className="font-semibold text-slate-600 hover:text-indigo-800">
                 Contact
               </Link>
-              <span>Â·</span>
+              <span>·</span>
               <Link to="/terms-and-conditions" className="font-semibold text-slate-600 hover:text-indigo-800">
                 Terms
               </Link>
-              <span>Â·</span>
+              <span>·</span>
               <Link to="/privacy-policy" className="font-semibold text-slate-600 hover:text-indigo-800">
                 Privacy
               </Link>
-              <span>Â·</span>
+              <span>·</span>
               <Link to="/refund-policy" className="font-semibold text-slate-600 hover:text-indigo-800">
                 Refunds
               </Link>
-              <span>Â·</span>
+              <span>·</span>
               <Link to="/cancellation-policy" className="font-semibold text-slate-600 hover:text-indigo-800">
                 Cancellation
               </Link>
