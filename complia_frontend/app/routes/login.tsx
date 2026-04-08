@@ -24,15 +24,8 @@ export default function LoginPage() {
   const [searchParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [activeMode, setActiveMode] = useState<"signin" | "signup">("signin");
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  const [signupEmail, setSignupEmail] = useState("");
-  const [signupPassword, setSignupPassword] = useState("");
-  const [signupConfirmPassword, setSignupConfirmPassword] = useState("");
-
   const googleConfigured = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
 
   const redirectAfterSuccess = () => {
@@ -107,6 +100,70 @@ export default function LoginPage() {
     localStorage.setItem("user", JSON.stringify(userPayload));
   };
 
+  const loginOrCreateWithEmail = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !password) {
+      setError("Enter your email and password to continue.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const loginResponse = await fetch(`${API_BASE}/auth/login/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail, password }),
+      });
+
+      if (loginResponse.ok) {
+        const loginData = (await loginResponse.json()) as AuthPayload;
+        await persistSession(loginData, normalizedEmail);
+        trackEvent("login_success", { provider: "email_password", mode: "signin" });
+        redirectAfterSuccess();
+        return;
+      }
+
+      // Unified flow: if sign-in fails, attempt account creation with same credentials.
+      const registrationResponse = await fetch(`${API_BASE}/auth/registration/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: normalizedEmail,
+          password1: password,
+          password2: password,
+        }),
+      });
+
+      if (registrationResponse.ok) {
+        const registrationData = (await registrationResponse.json()) as AuthPayload;
+        await persistSession(registrationData, normalizedEmail);
+        trackEvent("login_success", { provider: "email_password", mode: "autocreate" });
+        redirectAfterSuccess();
+        return;
+      }
+
+      const registrationError = await extractApiError(registrationResponse, "Could not continue with this email right now.");
+      const loginError = await extractApiError(loginResponse, "Email sign-in failed.");
+
+      const lowerRegistrationError = registrationError.toLowerCase();
+      if (
+        lowerRegistrationError.includes("already") ||
+        lowerRegistrationError.includes("exists")
+      ) {
+        throw new Error("Account exists. Password looks incorrect. Retry or continue with Google.");
+      }
+
+      throw new Error(registrationError || loginError);
+    } catch (err) {
+      trackEvent("login_failed", { provider: "email_password" });
+      setError(err instanceof Error ? err.message : "Could not continue with email right now.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       setLoading(true);
@@ -124,7 +181,6 @@ export default function LoginPage() {
 
         const data = (await backendResponse.json()) as AuthPayload;
         await persistSession(data);
-
         trackEvent("login_success", { provider: "google" });
         redirectAfterSuccess();
       } catch (err) {
@@ -140,72 +196,6 @@ export default function LoginPage() {
     },
     flow: "implicit",
   });
-
-  const handleEmailSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch(`${API_BASE}/auth/login/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await extractApiError(response, "Email sign-in failed. Check credentials and retry."));
-      }
-
-      const data = (await response.json()) as AuthPayload;
-      await persistSession(data, email.trim());
-      trackEvent("login_success", { provider: "email_password" });
-      redirectAfterSuccess();
-    } catch (err) {
-      trackEvent("login_failed", { provider: "email_password" });
-      setError(err instanceof Error ? err.message : "Email sign-in failed. Please retry.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEmailSignUp = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    if (signupPassword !== signupConfirmPassword) {
-      setLoading(false);
-      setError("Passwords do not match.");
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE}/auth/registration/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: signupEmail.trim(),
-          password1: signupPassword,
-          password2: signupConfirmPassword,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await extractApiError(response, "Account creation failed. Please retry."));
-      }
-
-      const data = (await response.json()) as AuthPayload;
-      await persistSession(data, signupEmail.trim());
-      trackEvent("login_success", { provider: "email_signup" });
-      redirectAfterSuccess();
-    } catch (err) {
-      trackEvent("login_failed", { provider: "email_signup" });
-      setError(err instanceof Error ? err.message : "Account creation failed. Please retry.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="grid-aurora relative min-h-screen overflow-x-hidden px-4 py-8 sm:px-5 sm:py-10">
@@ -227,140 +217,16 @@ export default function LoginPage() {
             Access your Safe workspace and advisor workflows.
           </h1>
           <p className="mt-4 max-w-md text-base leading-7 text-slate-600">
-            Sign in once and continue across search, Safe cases, and CA request tracking.
+            Continue with Google (recommended), or use one email flow. If your email has no account yet, we create it automatically.
           </p>
         </section>
 
         <section className="md:w-1/2">
           <div className="rounded-[24px] border border-slate-200/80 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:rounded-[30px] sm:p-7 md:p-8">
             <h2 className="font-display text-2xl font-bold tracking-tight text-slate-900">Welcome to Complia</h2>
-            <p className="mt-2 text-sm text-slate-600">Use email/password or Google to access your Safe workspace.</p>
-
-            <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
-              <button
-                type="button"
-                onClick={() => setActiveMode("signin")}
-                className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                  activeMode === "signin" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
-                }`}
-              >
-                Sign in
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveMode("signup")}
-                className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                  activeMode === "signup" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
-                }`}
-              >
-                Create account
-              </button>
-            </div>
+            <p className="mt-2 text-sm text-slate-600">Google first, unified email fallback.</p>
 
             {error && <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
-
-            {activeMode === "signin" ? (
-              <form onSubmit={handleEmailSignIn} className="mt-5 space-y-3">
-                <div>
-                  <label htmlFor="signin-email" className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    Email
-                  </label>
-                  <input
-                    id="signin-email"
-                    type="email"
-                    required
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-hidden ring-indigo-200 transition focus:border-indigo-400 focus:ring-2"
-                    placeholder="you@company.com"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="signin-password" className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    Password
-                  </label>
-                  <input
-                    id="signin-password"
-                    type="password"
-                    required
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-hidden ring-indigo-200 transition focus:border-indigo-400 focus:ring-2"
-                    placeholder="Your password"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
-                >
-                  {loading ? "Signing in..." : "Sign in with email"}
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={handleEmailSignUp} className="mt-5 space-y-3">
-                <div>
-                  <label htmlFor="signup-email" className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    Email
-                  </label>
-                  <input
-                    id="signup-email"
-                    type="email"
-                    required
-                    autoComplete="email"
-                    value={signupEmail}
-                    onChange={(e) => setSignupEmail(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-hidden ring-indigo-200 transition focus:border-indigo-400 focus:ring-2"
-                    placeholder="you@company.com"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="signup-password" className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    Password
-                  </label>
-                  <input
-                    id="signup-password"
-                    type="password"
-                    required
-                    autoComplete="new-password"
-                    value={signupPassword}
-                    onChange={(e) => setSignupPassword(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-hidden ring-indigo-200 transition focus:border-indigo-400 focus:ring-2"
-                    placeholder="At least 8 characters"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="signup-password-confirm" className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    Confirm password
-                  </label>
-                  <input
-                    id="signup-password-confirm"
-                    type="password"
-                    required
-                    autoComplete="new-password"
-                    value={signupConfirmPassword}
-                    onChange={(e) => setSignupConfirmPassword(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-hidden ring-indigo-200 transition focus:border-indigo-400 focus:ring-2"
-                    placeholder="Repeat password"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
-                >
-                  {loading ? "Creating account..." : "Create account"}
-                </button>
-              </form>
-            )}
-
-            <div className="mt-5 flex items-center gap-3 text-xs text-slate-400">
-              <span className="h-px flex-1 bg-slate-200" />
-              <span>OR</span>
-              <span className="h-px flex-1 bg-slate-200" />
-            </div>
 
             <button
               onClick={() => {
@@ -371,7 +237,7 @@ export default function LoginPage() {
                 googleLogin();
               }}
               disabled={loading || !googleConfigured}
-              className="mt-4 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-slate-900 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
+              className="mt-5 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-slate-900 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
             >
               {loading ? (
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -386,11 +252,68 @@ export default function LoginPage() {
               {loading ? "Signing in..." : "Continue with Google"}
             </button>
 
+            <div className="mt-5 flex items-center gap-3 text-xs text-slate-400">
+              <span className="h-px flex-1 bg-slate-200" />
+              <span>or continue with email</span>
+              <span className="h-px flex-1 bg-slate-200" />
+            </div>
+
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void loginOrCreateWithEmail();
+              }}
+              className="mt-4 space-y-3"
+            >
+              <div>
+                <label htmlFor="email" className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-hidden ring-indigo-200 transition focus:border-indigo-400 focus:ring-2"
+                  placeholder="you@company.com"
+                />
+              </div>
+              <div>
+                <label htmlFor="password" className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-hidden ring-indigo-200 transition focus:border-indigo-400 focus:ring-2"
+                  placeholder="Password"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="inline-flex w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:border-indigo-300 hover:text-indigo-800 disabled:opacity-60"
+              >
+                {loading ? "Continuing..." : "Continue with Email"}
+              </button>
+            </form>
+
             {!googleConfigured && (
               <p className="mt-3 text-xs text-amber-700">
                 Google OAuth is disabled. Set <code>VITE_GOOGLE_CLIENT_ID</code> in frontend environment variables.
               </p>
             )}
+
+            <p className="mt-3 text-xs text-slate-500">
+              Unified flow: if this email exists we sign you in, otherwise we create your account automatically.
+            </p>
 
             <div className="mt-7 border-t border-slate-200 pt-4 text-xs text-slate-500">
               By signing in, you agree to Complia terms and privacy policy.
