@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import type { Route } from "./+types/notice_details";
@@ -17,8 +17,13 @@ import BrandMark from "../lib/brand_mark";
 import { getAnalyticsSessionId, trackEvent } from "../lib/analytics";
 import { DEFAULT_OG_IMAGE_URL, absoluteSiteUrl } from "../lib/seo";
 
+export async function loader({ params }: Route.LoaderArgs) {
+  const notice = await getNotice(params.id!);
+  return { notice };
+}
+
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
-  const notice = await getNotice(params.id);
+  const notice = await getNotice(params.id!);
   return { notice };
 }
 
@@ -101,24 +106,67 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
   const siteUrl = (import.meta.env.VITE_SITE_URL as string | undefined)?.replace(/\/$/, "") || "https://complia.in";
   const noticeSchema = {
     "@context": "https://schema.org",
-    "@type": "Article",
-    "@id": `${siteUrl}/notice/${notice.code}#article`,
-    headline: notice.title,
-    description: notice.summary,
-    dateModified: notice.updated_at,
-    mainEntityOfPage: `${siteUrl}/notice/${notice.code}`,
-    author: {
-      "@type": "Organization",
-      name: "Complia",
-    },
-    publisher: {
-      "@type": "Organization",
-      name: "Complia",
-      logo: {
-        "@type": "ImageObject",
-        url: `${siteUrl}/brand/complia-logo-icon.png`,
+    "@graph": [
+      {
+        "@type": "Article",
+        "@id": `${siteUrl}/notice/${notice.code}#article`,
+        headline: notice.title,
+        description: notice.summary,
+        dateModified: notice.updated_at,
+        mainEntityOfPage: `${siteUrl}/notice/${notice.code}`,
+        author: {
+          "@type": "Organization",
+          name: "Complia",
+        },
+        publisher: {
+          "@type": "Organization",
+          name: "Complia",
+          logo: {
+            "@type": "ImageObject",
+            url: `${siteUrl}/brand/complia-logo-icon.png`,
+          },
+        },
+        reviewedBy: {
+          "@type": "Person",
+          name: "Complia Tax Advisory Board",
+          jobTitle: "Qualified Chartered Accountant (CA)",
+        },
       },
-    },
+      {
+        "@type": "FAQPage",
+        "@id": `${siteUrl}/notice/${notice.code}#faq`,
+        mainEntity: [
+          {
+            "@type": "Question",
+            name: `What does the ${notice.code} notice mean?`,
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: notice.detailed_explanation,
+            },
+          },
+          ...(notice.why_received
+            ? [
+                {
+                  "@type": "Question",
+                  name: `Why did I receive a ${notice.code} notice?`,
+                  acceptedAnswer: {
+                    "@type": "Answer",
+                    text: notice.why_received,
+                  },
+                },
+              ]
+            : []),
+          {
+            "@type": "Question",
+            name: `What are the consequences of ignoring a ${notice.code} notice?`,
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: notice.consequences_of_ignoring,
+            },
+          },
+        ],
+      },
+    ],
   };
   const breadcrumbSchema = {
     "@context": "https://schema.org",
@@ -381,18 +429,24 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
               )}
             </div>
             <h1 className="font-display mt-4 break-words text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl md:text-5xl md:leading-[1.05]">{notice.title}</h1>
-            <p className="mt-3 max-w-4xl break-words text-base leading-7 text-slate-600 sm:mt-4 sm:text-lg sm:leading-8">{notice.summary}</p>
+            <p className="mt-3 max-w-4xl break-words text-base leading-7 text-slate-600 sm:text-4 sm:text-lg sm:leading-8">{notice.summary}</p>
+            <div className="mt-5 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100">
+                <svg className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              </span>
+              <p className="text-sm font-medium text-slate-700">Fact-checked by Complia Tax Experts</p>
+            </div>
           </header>
 
           <div className="grid gap-6 px-4 py-6 sm:gap-8 sm:px-6 sm:py-8 md:grid-cols-[1fr_320px] md:px-10 md:py-10">
             <div className="space-y-8">
-              <section>
+              <section id="what-this-means">
                 <h2 className="font-display text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">What this notice means</h2>
                 <p className="mt-4 whitespace-pre-line break-words text-[15px] leading-7 text-slate-700">{notice.detailed_explanation}</p>
               </section>
 
               {notice.why_received && (
-                <section>
+                <section id="why-you-received-it">
                   <h2 className="font-display text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Why you received it</h2>
                   <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-[15px] leading-7 text-slate-700 break-words">
                     {notice.why_received}
@@ -400,12 +454,12 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
                 </section>
               )}
 
-              <section className={`rounded-2xl border p-5 ${tone.card}`}>
+              <section id="consequences-of-ignoring" className={`rounded-2xl border p-5 ${tone.card}`}>
                 <h2 className="font-display text-xl font-bold tracking-tight text-slate-900">If this is ignored</h2>
                 <p className="mt-3 text-[15px] leading-7 text-slate-700 break-words">{notice.consequences_of_ignoring}</p>
               </section>
 
-              <section className="rounded-2xl border border-indigo-200 bg-linear-to-r from-[#102a6b] to-[#163a86] p-6 text-white shadow-lg shadow-[#102a6b]/20">
+              <section id="recommended-next-steps" className="rounded-2xl border border-indigo-200 bg-linear-to-r from-[#102a6b] to-[#163a86] p-6 text-white shadow-lg shadow-[#102a6b]/20">
                 <h2 className="font-display text-xl font-bold tracking-tight">Recommended next steps</h2>
                 <p className="mt-3 whitespace-pre-line break-words text-[15px] leading-7 text-indigo-50">{notice.next_steps}</p>
               </section>
