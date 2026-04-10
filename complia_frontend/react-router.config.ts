@@ -10,7 +10,7 @@ export default {
       const locs = xml.match(/<loc>(.*?)<\/loc>/g) || [];
       const paths = locs.map((loc) => {
         const url = new URL(loc.replace(/<\/?loc>/g, ""));
-        return url.pathname;
+        return decodeURI(url.pathname);
       });
       // Deduplicate and ensure base routes are included
       return Array.from(new Set([
