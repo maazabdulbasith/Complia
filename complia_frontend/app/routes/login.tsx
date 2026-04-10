@@ -1,4 +1,4 @@
-ï»¿import { useGoogleLogin } from "@react-oauth/google";
+import { useGoogleLogin } from "@react-oauth/google";
 import { jwtDecode } from "jwt-decode";
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
@@ -125,6 +125,7 @@ export default function LoginPage() {
         return;
       }
 
+      // Unified flow: if sign-in fails, attempt account creation with same credentials.
       const registrationResponse = await fetch(`${API_BASE}/auth/registration/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -147,7 +148,10 @@ export default function LoginPage() {
       const loginError = await extractApiError(loginResponse, "Email sign-in failed.");
 
       const lowerRegistrationError = registrationError.toLowerCase();
-      if (lowerRegistrationError.includes("already") || lowerRegistrationError.includes("exists")) {
+      if (
+        lowerRegistrationError.includes("already") ||
+        lowerRegistrationError.includes("exists")
+      ) {
         throw new Error("Account exists. Password looks incorrect. Retry or continue with Google.");
       }
 
@@ -318,19 +322,19 @@ export default function LoginPage() {
               <Link to="/contact-us" className="font-semibold text-slate-600 hover:text-indigo-800">
                 Contact
               </Link>
-              <span>Â·</span>
+              <span>·</span>
               <Link to="/terms-and-conditions" className="font-semibold text-slate-600 hover:text-indigo-800">
                 Terms
               </Link>
-              <span>Â·</span>
+              <span>·</span>
               <Link to="/privacy-policy" className="font-semibold text-slate-600 hover:text-indigo-800">
                 Privacy
               </Link>
-              <span>Â·</span>
+              <span>·</span>
               <Link to="/refund-policy" className="font-semibold text-slate-600 hover:text-indigo-800">
                 Refunds
               </Link>
-              <span>Â·</span>
+              <span>·</span>
               <Link to="/cancellation-policy" className="font-semibold text-slate-600 hover:text-indigo-800">
                 Cancellation
               </Link>

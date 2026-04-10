@@ -146,15 +146,15 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
           },
           ...(notice.why_received
             ? [
-                {
-                  "@type": "Question",
-                  name: `Why did I receive a ${notice.code} notice?`,
-                  acceptedAnswer: {
-                    "@type": "Answer",
-                    text: notice.why_received,
-                  },
+              {
+                "@type": "Question",
+                name: `Why did I receive a ${notice.code} notice?`,
+                acceptedAnswer: {
+                  "@type": "Answer",
+                  text: notice.why_received,
                 },
-              ]
+              },
+            ]
             : []),
           {
             "@type": "Question",
@@ -434,7 +434,7 @@ export default function NoticeDetails({ loaderData }: Route.ComponentProps) {
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100">
                 <svg className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
               </span>
-              <p className="text-sm font-medium text-slate-700">Fact-checked by Complia Tax Experts</p>
+              <p className="text-sm font-medium text-slate-700">Fact-checked by Tax Experts</p>
             </div>
           </header>
 
